@@ -1,28 +1,54 @@
-import { Award, Folder } from 'lucide-react';
+import { useState } from 'react';
+import { Award, Folder, Link2 } from 'lucide-react';
 import { CertificatePreview } from '../components/CertificateCard';
 import { GitHubConnect } from '../components/GitHubConnect';
 import { Avatar } from '../components/LiquidGlassNavbar';
 import { PageHeader } from '../components/PageHeader';
 import { SampleTag } from '../components/SampleTag';
 import { GOALS } from '../data/choices';
-import { Chip } from '../glass/controls';
+import { Chip, GlassSwitch } from '../glass/controls';
+import { useToast } from '../glass/GlassToast';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
+import { LiquidGlassInput } from '../glass/LiquidGlassInput';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
 import { LiquidProgressBar } from '../glass/LiquidProgressBar';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { certificateStatus } from '../lib/progress';
 import { useStore } from '../lib/store';
 import { useWorkspace } from '../lib/workspace';
+import { api } from '../services';
 
 export default function Portfolio() {
   const { t, percent } = useI18n();
-  const { name, skills, projects, certificates } = useWorkspace();
+  const { authenticated } = useAuth();
+  const { name, skills, projects, certificates, profile: remoteProfile, retry } = useWorkspace();
+  const toast = useToast();
   const profile = useStore((s) => s.profile);
   const showScores = useStore((s) => s.settings.showScores);
+  const [slug, setSlug] = useState(remoteProfile?.portfolioSlug ?? '');
+  const [isPublic, setIsPublic] = useState(remoteProfile?.portfolioPublic ?? false);
+  const [savingShare, setSavingShare] = useState(false);
   const goal = GOALS.find(([v]) => v === profile.goal)?.[1];
   // Only work the backend has confirmed belongs in a portfolio.
   const finished = projects.filter((p) => p.status === 'verified');
   const issued = certificates.filter((c) => certificateStatus(c) === 'verified');
+
+  const saveShare = async () => {
+    setSavingShare(true);
+    try {
+      await api.updatePortfolio({
+        portfolioSlug: slug.trim() ? slug.trim().toLowerCase() : null,
+        portfolioPublic: isPublic,
+        showScoresPublic: showScores,
+      });
+      toast('Portfolio sharing settings saved.');
+      retry();
+    } catch {
+      toast('Use a lowercase slug (4-40 letters, digits, hyphens).', 'bad');
+    }
+    setSavingShare(false);
+  };
 
   return (
     <>
@@ -38,6 +64,28 @@ export default function Portfolio() {
           </div>
           <LiquidGlassButton to="/settings">{t('Edit profile')}</LiquidGlassButton>
         </LiquidGlassPanel>
+
+        {authenticated && (
+          <LiquidGlassPanel title="Shareable portfolio">
+            <div className="grid gap-4 tab:grid-cols-[1fr_auto] tab:items-end">
+              <LiquidGlassInput
+                label="Public URL slug"
+                placeholder="your-name"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+              />
+              <LiquidGlassButton variant="primary" loading={savingShare} onClick={() => void saveShare()} icon={<Link2 aria-hidden />}>
+                Save sharing
+              </LiquidGlassButton>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <GlassSwitch label="Make portfolio public" checked={isPublic} onChange={setIsPublic} />
+              {isPublic && slug.trim() && (
+                <code className="text-sm text-violet-deep">{`${location.origin}/u/${slug.trim().toLowerCase()}`}</code>
+              )}
+            </div>
+          </LiquidGlassPanel>
+        )}
 
         <LiquidGlassPanel title={t('Skills')} tint="rgb(176 240 246 / .5)">
           <ul className="grid gap-x-8 gap-y-4 tab:grid-cols-2">

@@ -8,13 +8,16 @@ import { PROGRAMMING_LANGUAGES } from '../data/languages';
 import { GlassSelect } from '../glass/controls';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { runJs } from '../lib/runner';
 import { notify, setState, useStore } from '../lib/store';
+import { api } from '../services';
 import NotFound from './NotFound';
 
 export default function CodeChallenge() {
   const { t, number } = useI18n();
+  const { authenticated } = useAuth();
   const { id } = useParams();
   const editor = useId();
   const challenge = CHALLENGES.find((c) => c.id === id);
@@ -29,12 +32,33 @@ export default function CodeChallenge() {
 
   const run = async () => {
     setBusy(true);
+    if (!language.runs && authenticated) {
+      try {
+        const remote = await api.executeCode(challenge.id, language.id, code);
+        setOutcome(remote.publicResults ? { results: remote.publicResults } : { error: remote.error || remote.message || 'Remote sandbox unavailable.' });
+      } catch (e) {
+        setOutcome({ error: e instanceof Error ? e.message : 'Isolated execution service is unavailable.' });
+      }
+      setBusy(false);
+      return;
+    }
     const r = await runJs(code, challenge.fn, challenge.tests);
     setOutcome(r);
     setBusy(false);
     if (!r.results) return;
     const passed = r.results.filter((x) => x.ok).length;
     setState((s) => ({ code: { ...s.code, [challenge.id]: { passed, total: r.results!.length, at: Date.now() } } }));
+    if (authenticated) {
+      void api.recordCodeSubmission({
+        challengeId: challenge.id,
+        languageId: language.id,
+        code,
+        executionMode: 'browser_js',
+        passedCount: passed,
+        totalCount: r.results.length,
+        results: r.results,
+      }).catch(() => {});
+    }
     if (passed === r.results.length) notify({ id: `code-${challenge.id}`, text: 'All tests passed on a coding challenge.', to: `/assessments/code/${challenge.id}` });
   };
 
@@ -67,7 +91,7 @@ export default function CodeChallenge() {
               >
                 {t('Reset')}
               </LiquidGlassButton>
-              <LiquidGlassButton variant="primary" loading={busy} disabled={!language.runs} onClick={run} icon={<Play className="rtl:-scale-x-100" fill="currentColor" strokeWidth={0} aria-hidden />}>
+              <LiquidGlassButton variant="primary" loading={busy} disabled={!language.runs && !authenticated} onClick={run} icon={<Play className="rtl:-scale-x-100" fill="currentColor" strokeWidth={0} aria-hidden />}>
                 {t('Run tests')}
               </LiquidGlassButton>
             </div>

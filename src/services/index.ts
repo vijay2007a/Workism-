@@ -1,36 +1,153 @@
-// The only place the app talks to a backend. Without VITE_API_URL every read returns labelled sample data
-// and every write throws NotConnected, which screens show as "not connected" rather than faking success.
-// The paths below are assumptions: point them at the real WORKISM endpoints.
+// Central API client for WORKISM 3.0.
+// When neither VITE_API_URL nor VITE_SUPABASE_URL/PUBLISHABLE_KEY is configured, reads return labelled sample data
+// and writes throw NotConnected so screens never fake production success.
 import type { SkillSource } from '../lib/progress';
 import * as sample from '../data/sample';
+import { supabase, supabaseConfigured } from '../lib/supabase';
 
+export type UserRole = 'student' | 'instructor' | 'admin';
 export interface Skill { id: string; name: string; score: number; target: number; history: number[]; source: SkillSource }
 export interface Question { q: string; options: string[]; answer: number; why: string }
 export interface Lesson { id: string; title: string; minutes: number; body: string[]; code?: string; check: Question }
 export interface Course { id: string; skill: string; title: string; blurb: string; level: string; modules: { title: string; lessons: Lesson[] }[] }
-export interface Project { id: string; title: string; skills: string[]; level: string; hours: number; brief: string; requirements: string[]; rubric: string[]; status?: 'submitted' | 'evaluating' | 'evaluated' | 'verified'; score?: number; feedback?: string }
-export interface Certificate { id: string; title: string; skill: string; course: string; project: string; status: 'verified' | 'pending' | 'revoked'; source: 'sample' | 'api'; issuedAt?: number }
-export interface Workspace { name: string; skills: Skill[]; courses: Course[]; projects: Project[]; certificates: Certificate[]; lessonsDone: string[] }
+export interface Project {
+  id: string;
+  title: string;
+  skills: string[];
+  level: string;
+  hours: number;
+  brief: string;
+  requirements: string[];
+  rubric: string[];
+  status?: 'submitted' | 'evaluating' | 'evaluated' | 'verified';
+  score?: number;
+  feedback?: string;
+  submissionId?: string;
+  repoUrl?: string;
+  fileName?: string;
+}
+export interface Certificate {
+  id: string;
+  templateId?: string;
+  title: string;
+  skill: string;
+  course: string;
+  project: string;
+  status: 'verified' | 'pending' | 'revoked';
+  source: 'sample' | 'api';
+  issuedAt?: number;
+  holderName?: string;
+  signatureVerified?: boolean;
+  signatureAlg?: string;
+}
+export interface RoadmapItem { courseId: string | null; skillId: string | null; title: string; objective: string; lessonIds: string[] }
+export interface Roadmap { id: string; goal: string; preferredLanguage: string; summary: string; milestones: RoadmapItem[]; createdAt: string }
+export interface RemoteProfile {
+  id: string;
+  role: UserRole;
+  displayName: string;
+  email: string;
+  careerGoal: string;
+  interests: string[];
+  learningStyle: string;
+  learningPace: string;
+  preferredLanguage: string;
+  preferredCodeLanguage: string;
+  githubUsername: string;
+  portfolioSlug: string | null;
+  portfolioPublic: boolean;
+  showScoresPublic: boolean;
+  inAppNotices: boolean;
+}
+export interface Workspace {
+  name: string;
+  role?: UserRole;
+  profile?: RemoteProfile | null;
+  roadmap?: Roadmap | null;
+  skills: Skill[];
+  courses: Course[];
+  projects: Project[];
+  certificates: Certificate[];
+  lessonsDone: string[];
+}
 export interface ChatMessage { role: 'user' | 'assistant'; text: string }
 
-const API: string = import.meta.env.VITE_API_URL ?? '';
-export const connected = API !== '';
+export interface AssessmentAttemptStart {
+  attempt: { id: string; assessmentId: string; skillId: string; expiresAt: string; passMark: number; timeLimitSeconds: number };
+  questions: { id: string; prompt: string; options: string[]; difficulty: string }[];
+}
+
+export interface AssessmentSubmissionResult {
+  attempt: { id: string; scorePercent: number; correctCount: number; totalCount: number; aiExplanation: string | null };
+  passed: boolean;
+  passMark: number;
+  review: { questionId: string; prompt: string; chosenIndex: number | null; correctIndex: number; correct: boolean; explanation: string }[];
+  skills: Skill[];
+}
+
+export interface PublicPortfolioData {
+  displayName: string;
+  careerGoal: string;
+  githubUsername: string;
+  showScores: boolean;
+  skills: { id: string; name: string; score: number | null; source: string }[];
+  projects: { id: string; title: string; brief: string; repoUrl: string | null }[];
+  certificates: { verificationCode: string; title: string; skillName: string; issuedAt: string }[];
+}
+
+const API_BASE: string = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/$/, '');
+export const connected = Boolean(API_BASE || supabaseConfigured);
+
+let currentAccessToken: string | null = null;
+export function setAccessToken(token: string | null) {
+  currentAccessToken = token;
+}
+export function getAccessToken(): string | null {
+  return currentAccessToken;
+}
 
 export class NotConnected extends Error {}
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
 
-async function call<T>(path: string, body?: unknown): Promise<T> {
+function buildUrl(path: string): string {
+  const normalized = path.startsWith('/api/') ? path : `/api${path.startsWith('/') ? path : `/${path}`}`;
+  return API_BASE ? `${API_BASE}${normalized}` : normalized;
+}
+
+async function call<T>(path: string, opts: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; auth?: boolean } = {}): Promise<T> {
   if (!connected) throw new NotConnected(path);
-  const res = await fetch(API + path, {
-    method: body ? 'POST' : 'GET',
+  const method = opts.method ?? (opts.body !== undefined ? 'POST' : 'GET');
+  const headers: Record<string, string> = {};
+  if (opts.body !== undefined) headers['content-type'] = 'application/json';
+  if (opts.auth !== false && currentAccessToken) {
+    headers.authorization = `Bearer ${currentAccessToken}`;
+  }
+  const res = await fetch(buildUrl(path), {
+    method,
     credentials: 'include',
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
-  if (!res.ok) throw new Error(`${path} responded ${res.status}`);
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string }; message?: string } | null;
+    throw new ApiRequestError(
+      res.status,
+      errBody?.error?.code ?? 'request_failed',
+      errBody?.error?.message ?? errBody?.message ?? `${path} responded ${res.status}`,
+    );
+  }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
-/** Provenance is stamped here, never taken from the payload. */
+/** Provenance is stamped here, never taken from an unverified payload. */
 const fromApi = (w: Workspace): Workspace => ({
   ...w,
   skills: w.skills.map((s) => ({ ...s, source: 'api' })),
@@ -38,21 +155,152 @@ const fromApi = (w: Workspace): Workspace => ({
 });
 
 export const api = {
-  workspace: (): Promise<Workspace> => (connected ? call<Workspace>('/me/workspace').then(fromApi) : Promise.resolve(sample.workspace)),
-  login: (email: string, password: string) => call<void>('/auth/login', { email, password }),
-  register: (name: string, email: string, password: string) => call<void>('/auth/register', { name, email, password }),
-  submitProject: (id: string, repo: string, note: string) => call<void>(`/projects/${encodeURIComponent(id)}/submissions`, { repo, note }),
-  verifyCertificate: (id: string) => call<Certificate>(`/certificates/${encodeURIComponent(id)}`).then((c): Certificate => ({ ...c, source: 'api' })),
-  ask: (messages: ChatMessage[]) => call<{ text: string }>('/assistant/messages', { messages }),
+  workspace: async (): Promise<Workspace> => {
+    if (!connected || !currentAccessToken) return sample.workspace;
+    return call<Workspace>('/api/me/workspace').then(fromApi);
+  },
+
+  login: async (email: string, password: string) => {
+    if (!connected) throw new NotConnected('/auth/login');
+    if (supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data.session) throw new ApiRequestError(401, 'invalid_credentials', error?.message || 'Invalid credentials.');
+      setAccessToken(data.session.access_token);
+      return;
+    }
+    const res = await call<{ accessToken: string }>('/api/auth/login', { body: { email, password }, auth: false });
+    setAccessToken(res.accessToken);
+  },
+
+  register: async (name: string, email: string, password: string): Promise<{ emailConfirmed: boolean }> => {
+    if (!connected) throw new NotConnected('/auth/register');
+    if (supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { display_name: name.slice(0, 60) },
+          emailRedirectTo: `${location.origin}/auth/callback`,
+        },
+      });
+      if (error || !data.user) throw new ApiRequestError(400, 'registration_failed', error?.message || 'Registration failed.');
+      if (data.session) setAccessToken(data.session.access_token);
+      return { emailConfirmed: Boolean(data.session) };
+    }
+    const res = await call<{ emailConfirmed: boolean; accessToken?: string }>('/api/auth/register', {
+      body: { name, email, password, redirectTo: `${location.origin}/auth/callback` },
+      auth: false,
+    });
+    if (res.accessToken) setAccessToken(res.accessToken);
+    return { emailConfirmed: res.emailConfirmed };
+  },
+
+  googleOAuth: async (): Promise<void> => {
+    if (!connected) throw new NotConnected('/auth/oauth/google');
+    const redirectTo = `${location.origin}/auth/callback`;
+    if (supabase) {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+      if (error) throw new ApiRequestError(400, 'oauth_failed', error.message);
+      return;
+    }
+    const res = await call<{ url: string }>('/api/auth/oauth/google', { body: { redirectTo }, auth: false });
+    location.assign(res.url);
+  },
+
+  recoverPassword: async (email: string) => {
+    if (!connected) throw new NotConnected('/auth/recover');
+    const redirectTo = `${location.origin}/reset-password`;
+    if (supabase) {
+      await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      return;
+    }
+    await call('/api/auth/recover', { body: { email, redirectTo }, auth: false });
+  },
+
+  resetPassword: async (password: string) => {
+    if (!connected) throw new NotConnected('/auth/reset');
+    if (supabase) {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw new ApiRequestError(400, 'reset_failed', error.message);
+      return;
+    }
+    await call('/api/auth/reset', { body: { password } });
+  },
+
+  logout: async () => {
+    if (supabase) await supabase.auth.signOut();
+    else if (connected && currentAccessToken) await call('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    setAccessToken(null);
+  },
+
+  updateProfile: (patch: Partial<Omit<RemoteProfile, 'id' | 'role' | 'email'>>) =>
+    call<{ profile: RemoteProfile }>('/api/profile', { method: 'PATCH', body: patch }),
+
+  startAssessment: (skillId: string, languageCode?: string) =>
+    call<AssessmentAttemptStart>(`/api/assessments/${encodeURIComponent(skillId)}/attempts`, { body: { languageCode } }),
+
+  submitAssessment: (attemptId: string, answers: (number | null)[], languageCode?: string) =>
+    call<AssessmentSubmissionResult>(`/api/assessments/attempts/${encodeURIComponent(attemptId)}/submit`, {
+      body: { answers, languageCode },
+    }),
+
+  completeLesson: (courseId: string, lessonId: string, checkPassed = true) =>
+    call<{ lessonsDone: string[]; courseFinished: boolean }>(`/api/lessons/${encodeURIComponent(lessonId)}/complete`, {
+      body: { courseId, checkPassed },
+    }),
+
+  generateRoadmap: (goal?: string, languageCode?: string) =>
+    call<{ roadmap: Roadmap; generatedBy: string }>('/api/ai/roadmap', { body: { goal, languageCode } }),
+
+  ask: (messages: ChatMessage[], languageCode?: string) =>
+    call<{ text: string }>('/api/ai/tutor', { body: { messages, languageCode } }),
+
+  executeCode: (challengeId: string, languageId: string, code: string) =>
+    call<{ status: string; simulated: false; passedCount?: number; totalCount?: number; publicResults?: { ok: boolean; got: string }[]; error?: string; message?: string }>('/api/code/execute', {
+      body: { challengeId, languageId, code },
+    }),
+
+  recordCodeSubmission: (payload: { challengeId: string; languageId: string; code: string; executionMode: 'browser_js' | 'remote_sandbox' | 'unavailable'; passedCount: number; totalCount: number; results: { ok: boolean; got: string }[] }) =>
+    call<{ id: string }>('/api/code/submissions', { body: payload }),
+
+  submitProject: (id: string, repo: string, note: string, extra?: { fileName?: string; fileMime?: string; fileBase64?: string; languageCode?: string }) =>
+    call<{ submission: Record<string, unknown> }>(`/api/projects/${encodeURIComponent(id)}/submissions`, {
+      body: { ...(repo ? { repo } : {}), note, ...extra },
+    }),
+
+  issueCertificate: (templateId: string) =>
+    call<{ certificate: { verificationCode: string } }>(`/api/certificates/${encodeURIComponent(templateId)}/issue`, { body: {} }),
+
+  certificatePdfUrl: (code: string) => buildUrl(`/api/certificates/${encodeURIComponent(code)}/pdf`),
+
+  verifyCertificate: (id: string) =>
+    call<Certificate>(`/api/verify/${encodeURIComponent(id)}`, { auth: false }).then((c): Certificate => ({ ...c, source: 'api' })),
+
+  updatePortfolio: (patch: { portfolioSlug?: string | null; portfolioPublic?: boolean; showScoresPublic?: boolean; githubUsername?: string }) =>
+    call<{ profile: RemoteProfile }>('/api/portfolio', { method: 'PATCH', body: patch }),
+
+  publicPortfolio: (slug: string) =>
+    call<{ portfolio: PublicPortfolioData }>(`/api/portfolio/${encodeURIComponent(slug)}`, { auth: false }),
+
+  // Instructor & Admin APIs
+  instructorOverview: () => call<{ counts: Record<string, number>; projects: { id: string; title: string }[] }>('/api/instructor/overview'),
+  instructorSubmissions: () => call<{ submissions: { id: string; projectId: string; userId: string; version: number; repoUrl: string | null; fileName: string | null; note: string; status: string; overallScore: number | null; createdAt: string }[] }>('/api/instructor/submissions'),
+  reviewSubmission: (id: string, body: { rubricScores: { criterion: string; score: number; maxPoints: number; comment: string }[]; feedback: string; approved: boolean }) =>
+    call(`/api/instructor/submissions/${encodeURIComponent(id)}/review`, { body }),
+  adminOverview: () => call<{ usersCount: number; roles: Record<string, number>; coursesCount: number; languagesCount: number; aiUsage: { totalRequests: number; byEndpoint: Record<string, number>; byStatus: Record<string, number> } }>('/api/admin/overview'),
+  adminUsers: () => call<{ users: RemoteProfile[] }>('/api/admin/users'),
+  setUserRole: (userId: string, role: UserRole) => call<{ user: RemoteProfile }>(`/api/admin/users/${encodeURIComponent(userId)}/role`, { method: 'PATCH', body: { role } }),
+  revokeCertificate: (certId: string, reason: string) => call(`/api/admin/certificates/${encodeURIComponent(certId)}/revoke`, { body: { reason } }),
+  adminAuditLogs: () => call<{ logs: { id: string; action: string; resource_type: string; resource_id: string | null; created_at: string }[] }>('/api/admin/audit-logs'),
 };
 
-/** What each screen still needs from the backend. Listed in Settings → Integrations. */
+/** What each screen needs from the backend. Listed in Settings -> Integrations. */
 export const INTEGRATIONS = [
-  { name: 'Learner records', needs: 'GET /me/workspace', used: 'Dashboard, skills, courses, projects, certificates' },
-  { name: 'Sign-in', needs: 'POST /auth/login, POST /auth/register', used: 'Log in, Register' },
-  { name: 'Project evaluation', needs: 'POST /projects/:id/submissions', used: 'Project Labs' },
-  { name: 'Certificate verification', needs: 'GET /certificates/:id', used: 'Certificates, public verify page' },
-  { name: 'AI assistant', needs: 'POST /assistant/messages', used: 'AI Assistant' },
+  { name: 'Learner records', needs: 'GET /api/me/workspace (Supabase RLS)', used: 'Dashboard, skills, courses, projects, certificates' },
+  { name: 'Sign-in', needs: 'Supabase Auth (Email, Google OAuth, Recovery)', used: 'Log in, Register' },
+  { name: 'Project evaluation', needs: 'POST /api/projects/:id/submissions + Instructor Review', used: 'Project Labs' },
+  { name: 'Certificate verification', needs: 'GET /api/verify/:code (HMAC-SHA256)', used: 'Certificates, public verify page' },
+  { name: 'AI assistant', needs: 'POST /api/ai/tutor, POST /api/ai/roadmap (Gemini)', used: 'AI Assistant' },
 ] as const;
 
 export interface Repo { name: string; description: string | null; html_url: string; language: string | null; stargazers_count: number; fork: boolean }

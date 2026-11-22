@@ -1,8 +1,9 @@
-import { Bell, ChevronDown, LogIn, Search, Settings, Sparkles, UserRound } from 'lucide-react';
-import { Link } from 'react-router';
+import { Bell, ChevronDown, LogIn, LogOut, Search, Settings, Sparkles, UserRound } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
 import { GlassMenu } from '../glass/GlassMenu';
 import { GlassTooltip } from '../glass/GlassTooltip';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { setState, useStore } from '../lib/store';
 import { useWorkspace } from '../lib/workspace';
@@ -71,11 +72,13 @@ function Notifications() {
 
 function ProfileMenu() {
   const { t } = useI18n();
-  const { name } = useWorkspace();
+  const go = useNavigate();
+  const { name, role } = useWorkspace();
+  const { authenticated, email, signOut } = useAuth();
   const links = [
     { to: '/portfolio', label: 'Portfolio', icon: UserRound },
     { to: '/settings', label: 'Settings', icon: Settings },
-    { to: '/login', label: 'Log in', icon: LogIn },
+    ...(!authenticated ? [{ to: '/login', label: 'Log in', icon: LogIn }] : []),
   ];
   return (
     <GlassMenu
@@ -94,7 +97,7 @@ function ProfileMenu() {
             <Avatar name={name} className="size-11" />
             <div className="min-w-0">
               <p className="truncate font-bold">{name || t('Student')}</p>
-              <p className="text-sm text-ink-soft">{t('On this device')}</p>
+              <p className="truncate text-sm text-ink-soft">{authenticated ? `${email || role}` : t('On this device')}</p>
             </div>
           </div>
           <ul>
@@ -106,6 +109,21 @@ function ProfileMenu() {
                 </Link>
               </li>
             ))}
+            {authenticated && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    void signOut().then(() => go('/login'));
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 font-medium hover:bg-white/60"
+                >
+                  <LogOut className="size-5" strokeWidth={1.6} aria-hidden />
+                  Sign out
+                </button>
+              </li>
+            )}
           </ul>
         </>
       )}

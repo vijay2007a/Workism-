@@ -5,12 +5,15 @@ import { AppLayout } from './components/AppLayout';
 import { AssistantProvider } from './components/AIAssistantPanel';
 import { GlassToastProvider } from './glass/GlassToast';
 import { useCalm, useLite } from './lib/effects';
+import { AuthProvider } from './lib/auth';
 import { I18nProvider } from './lib/i18n';
 import { useStore } from './lib/store';
 import { WorkspaceProvider } from './lib/workspace';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Auth = lazy(() => import('./pages/Auth'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Skills = lazy(() => import('./pages/Skills'));
@@ -26,6 +29,9 @@ const Certificates = lazy(() => import('./pages/Certificates'));
 const CertificatePage = lazy(() => import('./pages/CertificatePage'));
 const Verify = lazy(() => import('./pages/Verify'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
+const PublicPortfolio = lazy(() => import('./pages/PublicPortfolio'));
+const Instructor = lazy(() => import('./pages/Instructor'));
+const Admin = lazy(() => import('./pages/Admin'));
 const Assistant = lazy(() => import('./pages/Assistant'));
 const Settings = lazy(() => import('./pages/Settings'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -57,8 +63,11 @@ function Screens() {
           <Route index element={<Landing />} />
           <Route path="login" element={<Auth key="login" mode="login" />} />
           <Route path="register" element={<Auth key="register" mode="register" />} />
+          <Route path="auth/callback" element={<AuthCallback />} />
+          <Route path="reset-password" element={<ResetPassword />} />
           <Route path="onboarding" element={<Onboarding />} />
           <Route path="verify/:id" element={<Verify />} />
+          <Route path="u/:slug" element={<PublicPortfolio />} />
           <Route element={<AppLayout />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="skills" element={<Skills />} />
@@ -74,6 +83,8 @@ function Screens() {
             <Route path="certificates/:id" element={<CertificatePage />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="assistant" element={<Assistant />} />
+            <Route path="instructor" element={<Instructor />} />
+            <Route path="admin" element={<Admin />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
@@ -86,13 +97,15 @@ function Screens() {
 export default function App() {
   return (
     <I18nProvider>
-      <WorkspaceProvider>
-        <GlassToastProvider>
-          <AssistantProvider>
-            <Screens />
-          </AssistantProvider>
-        </GlassToastProvider>
-      </WorkspaceProvider>
+      <AuthProvider>
+        <WorkspaceProvider>
+          <GlassToastProvider>
+            <AssistantProvider>
+              <Screens />
+            </AssistantProvider>
+          </GlassToastProvider>
+        </WorkspaceProvider>
+      </AuthProvider>
     </I18nProvider>
   );
 }

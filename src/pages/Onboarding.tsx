@@ -10,14 +10,17 @@ import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassInput } from '../glass/LiquidGlassInput';
 import { Aurora } from '../glass/LiquidGlassShell';
 import { LiquidProgressBar } from '../glass/LiquidProgressBar';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { notify, setProfile, useStore } from '../lib/store';
 import { checkName } from '../lib/validate';
+import { api } from '../services';
 
 const STEPS = ['What are you working towards?', 'Which skills interest you?', 'How do you like to learn?', 'Which language should WORKISM use?'];
 
 export default function Onboarding() {
-  const { t, number } = useI18n();
+  const { t, number, lang } = useI18n();
+  const { authenticated } = useAuth();
   const go = useNavigate();
   const profile = useStore((s) => s.profile);
   const [step, setStep] = useState(0);
@@ -40,6 +43,16 @@ export default function Onboarding() {
     }
     if (!last) return move(step + 1);
     setProfile({ name: profile.name.trim() });
+    if (authenticated) {
+      void api.updateProfile({
+        displayName: profile.name.trim(),
+        careerGoal: profile.goal,
+        interests: profile.interests,
+        learningStyle: profile.style,
+        learningPace: profile.pace,
+        preferredLanguage: lang,
+      }).catch(() => {});
+    }
     notify({ id: 'onboarded', text: 'Your preferences are saved. Take an assessment to replace the sample scores.', to: '/assessments' });
     go('/dashboard');
   };

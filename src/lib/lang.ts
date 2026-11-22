@@ -16,6 +16,7 @@ export const LANGS = [
   { code: 'ko', native: '한국어', english: 'Korean' },
   { code: 'ar', native: 'العربية', english: 'Arabic' },
   { code: 'zh', native: '简体中文', english: 'Chinese' },
+  { code: 'pt', native: 'Português', english: 'Portuguese' },
 ] as const;
 
 export type LangCode = (typeof LANGS)[number]['code'];

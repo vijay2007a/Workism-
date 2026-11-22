@@ -12,7 +12,7 @@ import { useI18n } from '../lib/i18n';
 import { setProfile } from '../lib/store';
 import { checkEmail, checkName, checkPassword } from '../lib/validate';
 import { useWorkspace } from '../lib/workspace';
-import { api, NotConnected } from '../services';
+import { api, connected, NotConnected } from '../services';
 
 type Field = 'name' | 'email' | 'password';
 
@@ -24,6 +24,8 @@ export default function Auth({ mode }: { mode: 'login' | 'register' }) {
   const [values, setValues] = useState({ name: '', email: '', password: '' });
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [problem, setProblem] = useState<'' | 'offline' | 'rejected'>('');
+  const [infoMessage, setInfoMessage] = useState('');
+  const [recovering, setRecovering] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const check = (f: Field) =>
@@ -31,7 +33,7 @@ export default function Auth({ mode }: { mode: 'login' | 'register' }) {
       name: () => (joining ? checkName(values.name) : ''),
       email: () => checkEmail(values.email),
       // Signing in must accept whatever password the account already has.
-      password: () => (joining ? checkPassword(values.password) : values.password ? '' : 'Enter your password.'),
+      password: () => (recovering ? '' : joining ? checkPassword(values.password) : values.password ? '' : 'Enter your password.'),
     })[f]();
 
   const field = (f: Field) => ({
@@ -56,11 +58,36 @@ export default function Auth({ mode }: { mode: 'login' | 'register' }) {
     }
     setBusy(true);
     setProblem('');
+    setInfoMessage('');
     try {
-      if (joining) await api.register(values.name.trim(), values.email.trim(), values.password);
-      else await api.login(values.email.trim(), values.password);
-      retry(); // records now belong to the signed-in learner
-      go(joining ? '/onboarding' : '/dashboard');
+      if (recovering) {
+        await api.recoverPassword(values.email.trim());
+        setInfoMessage('If an account exists for that email, a password recovery link has been sent.');
+      } else if (joining) {
+        const res = await api.register(values.name.trim(), values.email.trim(), values.password);
+        if (!res.emailConfirmed) {
+          setInfoMessage('Check your email to verify your account before logging in.');
+          setBusy(false);
+          return;
+        }
+        retry();
+        go('/onboarding');
+      } else {
+        await api.login(values.email.trim(), values.password);
+        retry(); // records now belong to the signed-in learner
+        go('/dashboard');
+      }
+    } catch (err) {
+      setProblem(err instanceof NotConnected ? 'offline' : 'rejected');
+    }
+    setBusy(false);
+  };
+
+  const googleSignIn = async () => {
+    setBusy(true);
+    setProblem('');
+    try {
+      await api.googleOAuth();
     } catch (err) {
       setProblem(err instanceof NotConnected ? 'offline' : 'rejected');
     }
@@ -100,14 +127,21 @@ export default function Auth({ mode }: { mode: 'login' | 'register' }) {
           <form noValidate onSubmit={submit} className="grid gap-4">
             {joining && <LiquidGlassInput label={t('Name')} icon={<User aria-hidden />} autoComplete="name" {...field('name')} />}
             <LiquidGlassInput label={t('Email')} type="email" icon={<Mail aria-hidden />} autoComplete="email" inputMode="email" {...field('email')} />
-            <LiquidGlassInput
-              label={t('Password')}
-              type="password"
-              icon={<Lock aria-hidden />}
-              autoComplete={joining ? 'new-password' : 'current-password'}
-              hint={joining ? t('At least 8 characters, with a letter and a number.') : undefined}
-              {...field('password')}
-            />
+            {!recovering && (
+              <LiquidGlassInput
+                label={t('Password')}
+                type="password"
+                icon={<Lock aria-hidden />}
+                autoComplete={joining ? 'new-password' : 'current-password'}
+                hint={joining ? t('At least 8 characters, with a letter and a number.') : undefined}
+                {...field('password')}
+              />
+            )}
+            {infoMessage && (
+              <p role="status" className="lg-inset rounded-2xl px-4 py-3 text-[0.9375rem] text-ink">
+                {infoMessage}
+              </p>
+            )}
             <AnimatePresence>
               {problem && (
                 <motion.div role="alert" className="grid gap-3" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
@@ -125,8 +159,26 @@ export default function Auth({ mode }: { mode: 'login' | 'register' }) {
               )}
             </AnimatePresence>
             <LiquidGlassButton variant="primary" size="lg" type="submit" loading={busy} className="mt-1 w-full" icon={<ArrowRight className="order-1 rtl:-scale-x-100" aria-hidden />}>
-              {joining ? t('Create account') : t('Log in')}
+              {recovering ? 'Send recovery email' : joining ? t('Create account') : t('Log in')}
             </LiquidGlassButton>
+            {connected && !recovering && (
+              <LiquidGlassButton type="button" onClick={() => void googleSignIn()} disabled={busy} className="w-full">
+                Continue with Google
+              </LiquidGlassButton>
+            )}
+            {!joining && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRecovering(!recovering);
+                  setProblem('');
+                  setInfoMessage('');
+                }}
+                className="justify-self-center text-sm font-medium text-violet-deep underline-offset-4 hover:underline"
+              >
+                {recovering ? 'Back to log in' : 'Forgot password?'}
+              </button>
+            )}
           </form>
           <p className="mt-6 text-center">
             {joining ? t('Already have an account?') : t('New to WORKISM?')}{' '}

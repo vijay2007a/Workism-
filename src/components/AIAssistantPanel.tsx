@@ -18,7 +18,7 @@ let nextId = 0;
 
 /** One conversation, shared by the floating panel and the assistant page. Kept in memory only. */
 export function AssistantProvider({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +33,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           await new Promise((r) => setTimeout(r, 650));
           reply = { text: guide.answer, guide: true, fresh: true };
         } else {
-          reply = { ...(await api.ask(history.filter((e) => !e.error).map(({ role, text }) => ({ role, text })))), fresh: true };
+          reply = { ...(await api.ask(history.filter((e) => !e.error).map(({ role, text }) => ({ role, text })), lang)), fresh: true };
         }
       } catch (e) {
         reply = {
@@ -47,7 +47,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       setEntries((l) => [...l, { ...reply, id: nextId++, role: 'assistant' }]);
       setBusy(false);
     },
-    [t],
+    [t, lang],
   );
 
   const chat = useMemo<Chat>(

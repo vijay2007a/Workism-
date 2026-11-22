@@ -8,12 +8,13 @@ import { Chip } from '../glass/controls';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
 import { ScoreRing } from '../glass/LiquidProgressBar';
+import { useAuth } from '../lib/auth';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import { gradeQuiz, PASS_MARK } from '../lib/progress';
 import { notify, setState } from '../lib/store';
 import { skillColor, useWorkspace } from '../lib/workspace';
-import type { Question } from '../services';
+import { api, type AssessmentAttemptStart, type AssessmentSubmissionResult, type Question } from '../services';
 import NotFound from './NotFound';
 
 export const QUIZ_MINUTES = 5;
@@ -29,29 +30,70 @@ export default function Quiz() {
 }
 
 function Sheet({ skill, questions, color, again }: { skill: { id: string; name: string }; questions: Question[]; color: string; again: () => void }) {
-  const { t, number, percent } = useI18n();
+  const { t, number, percent, lang } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
   const [phase, setPhase] = useState<'ready' | 'running' | 'done'>('ready');
   const [answers, setAnswers] = useState<(number | undefined)[]>([]);
   const [at, setAt] = useState(0);
   const [left, setLeft] = useState(QUIZ_MINUTES * 60);
+  const [serverAttempt, setServerAttempt] = useState<AssessmentAttemptStart | null>(null);
+  const [serverResult, setServerResult] = useState<AssessmentSubmissionResult | null>(null);
+  const [starting, setStarting] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  const grade = gradeQuiz(questions, answers);
+  const activeQuestions = serverAttempt
+    ? serverAttempt.questions.map((q) => ({ q: q.prompt, options: q.options, answer: -1, why: '' }))
+    : questions;
+  const localGrade = gradeQuiz(questions, answers);
+  const grade = serverResult
+    ? { correct: serverResult.attempt.correctCount, total: serverResult.attempt.totalCount, percent: serverResult.attempt.scorePercent }
+    : localGrade;
+
+  const startAttempt = async () => {
+    if (!authenticated) {
+      setPhase('running');
+      return;
+    }
+    setStarting(true);
+    try {
+      const started = await api.startAssessment(skill.id, lang);
+      setServerAttempt(started);
+      setLeft(started.attempt.timeLimitSeconds);
+    } catch {
+      // Fallback to local practice questions if server attempt unavailable
+    }
+    setStarting(false);
+    setPhase('running');
+  };
 
   // The clock runs from a deadline, so a throttled tab cannot slow it down.
   useEffect(() => {
     if (phase !== 'running') return;
-    const deadline = Date.now() + QUIZ_MINUTES * 60_000;
+    const deadline = Date.now() + left * 1000;
     const id = setInterval(() => {
       const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setLeft(s);
       if (s === 0) setPhase('done');
     }, 500);
     return () => clearInterval(id);
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [phase]);
 
   useEffect(() => {
     if (phase !== 'done') return;
-    setState((s) => ({ quiz: { ...s.quiz, [skill.id]: { percent: grade.percent, at: Date.now() } } }));
+    if (authenticated && serverAttempt) {
+      const payload = activeQuestions.map((_, i) => (answers[i] === undefined ? null : answers[i]!));
+      void api.submitAssessment(serverAttempt.attempt.id, payload, lang).then(
+        (res) => {
+          setServerResult(res);
+          setState((s) => ({ quiz: { ...s.quiz, [skill.id]: { percent: res.attempt.scorePercent, at: Date.now() } } }));
+          retry();
+        },
+        () => {},
+      );
+      return;
+    }
+    setState((s) => ({ quiz: { ...s.quiz, [skill.id]: { percent: localGrade.percent, at: Date.now() } } }));
     notify({ id: `quiz-${skill.id}`, text: 'Your practice result has updated your skill profile.', to: `/skills?focus=${skill.id}` });
     // The result is recorded once, when the sheet is handed in.
     // oxlint-disable-next-line react/exhaustive-deps
@@ -73,7 +115,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
             <li>{t('You can move between questions and change answers until you hand in.')}</li>
             <li>{t('This is practice: it is not supervised and does not issue a certificate by itself.')}</li>
           </ul>
-          <LiquidGlassButton variant="primary" size="lg" onClick={() => setPhase('running')}>
+          <LiquidGlassButton variant="primary" size="lg" loading={starting} onClick={() => void startAttempt()}>
             {t('Start the clock')}
           </LiquidGlassButton>
         </LiquidGlassPanel>
@@ -82,7 +124,16 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
   }
 
   if (phase === 'done') {
-    const passed = grade.percent >= PASS_MARK;
+    const passed = grade.percent >= (serverResult?.passMark ?? PASS_MARK);
+    const reviewItems = serverResult
+      ? serverResult.review.map((r) => ({
+          q: r.prompt,
+          options: activeQuestions.find((aq) => aq.q === r.prompt)?.options ?? [],
+          answer: r.correctIndex,
+          chosen: r.chosenIndex ?? undefined,
+          why: r.explanation,
+        }))
+      : questions.map((q, i) => ({ q: q.q, options: q.options, answer: q.answer, chosen: answers[i], why: q.why }));
     return (
       <>
         <PageHeader title={t('{skill} results', { skill: skill.name })} back={{ to: '/assessments', label: t('Assessments') }} />
@@ -95,6 +146,9 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
               </h2>
               <p className="mt-1 mb-3 text-[1.0625rem] text-ink-soft">{t('{n} of {total} correct', { n: number(grade.correct), total: number(grade.total) })}</p>
               <Chip tone={passed ? 'good' : 'warn'}>{passed ? t('Reaches the pass mark') : t('Pass mark is {p}', { p: percent(PASS_MARK) })}</Chip>
+              {serverResult?.attempt.aiExplanation && (
+                <p className="mt-3 text-sm text-ink-soft">{serverResult.attempt.aiExplanation}</p>
+              )}
             </div>
             <div className="flex flex-wrap gap-3">
               <LiquidGlassButton icon={<RotateCcw aria-hidden />} onClick={again}>
@@ -106,8 +160,8 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
             </div>
           </LiquidGlassPanel>
           <ol className="grid gap-4">
-            {questions.map((q, i) => {
-              const right = answers[i] === q.answer;
+            {reviewItems.map((q) => {
+              const right = q.chosen === q.answer;
               return (
                 <li key={q.q} className="lg-panel lg-edge rounded-3xl p-5">
                   <p className="flex gap-3 font-semibold">
@@ -117,9 +171,9 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
                   <p className="ms-8 mt-2">
                     <span className="text-ink-soft">{t('Answer:')}</span> {q.options[q.answer]}
                   </p>
-                  {!right && answers[i] !== undefined && (
+                  {!right && q.chosen !== undefined && (
                     <p className="ms-8">
-                      <span className="text-ink-soft">{t('You chose:')}</span> {q.options[answers[i]]}
+                      <span className="text-ink-soft">{t('You chose:')}</span> {q.options[q.chosen]}
                     </p>
                   )}
                   <p className="ms-8 mt-1 text-ink-soft">{q.why}</p>
@@ -132,7 +186,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
     );
   }
 
-  const q = questions[at];
+  const q = activeQuestions[at];
   const answered = answers.filter((a) => a !== undefined).length;
   const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   return (
@@ -147,14 +201,14 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
         <LiquidGlassPanel>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={at} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18, transition: { duration: 0.1 } }}>
-              <p className="text-ink-soft">{t('Question {n} of {total}', { n: number(at + 1), total: number(questions.length) })}</p>
+              <p className="text-ink-soft">{t('Question {n} of {total}', { n: number(at + 1), total: number(activeQuestions.length) })}</p>
               <h2 ref={heading} tabIndex={-1} className="mt-1 mb-5 text-2xl leading-snug font-bold outline-none">
                 {q.q}
               </h2>
               <div role="radiogroup" aria-label={q.q} className="grid gap-3">
                 {q.options.map((o, i) => (
                   <label key={o} className="lg-option" data-on={answers[at] === i || undefined}>
-                    <input type="radio" name={`q${at}`} className="sr-only" checked={answers[at] === i} onChange={() => setAnswers(Array.from({ length: questions.length }, (_, k) => (k === at ? i : answers[k])))} />
+                    <input type="radio" name={`q${at}`} className="sr-only" checked={answers[at] === i} onChange={() => setAnswers(Array.from({ length: activeQuestions.length }, (_, k) => (k === at ? i : answers[k])))} />
                     {o}
                   </label>
                 ))}
@@ -165,7 +219,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
             <LiquidGlassButton disabled={at === 0} onClick={() => setAt(at - 1)} icon={<ArrowLeft className="rtl:-scale-x-100" aria-hidden />}>
               {t('Back')}
             </LiquidGlassButton>
-            {at < questions.length - 1 ? (
+            {at < activeQuestions.length - 1 ? (
               <LiquidGlassButton variant="primary" onClick={() => setAt(at + 1)} icon={<ArrowRight className="order-1 rtl:-scale-x-100" aria-hidden />}>
                 {t('Next')}
               </LiquidGlassButton>
@@ -178,13 +232,13 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
         </LiquidGlassPanel>
         <LiquidGlassPanel title={t('Questions')} tint="rgb(206 190 255 / .5)">
           <ol className="flex flex-wrap gap-2">
-            {questions.map((x, i) => (
+            {activeQuestions.map((x, i) => (
               <li key={x.q}>
                 <button
                   type="button"
                   className="lg-chip lg-choice relative size-11 justify-center px-0!"
                   aria-pressed={i === at}
-                  aria-label={`${t('Question {n} of {total}', { n: number(i + 1), total: number(questions.length) })}${answers[i] === undefined ? '' : `, ${t('answered')}`}`}
+                  aria-label={`${t('Question {n} of {total}', { n: number(i + 1), total: number(activeQuestions.length) })}${answers[i] === undefined ? '' : `, ${t('answered')}`}`}
                   onClick={() => setAt(i)}
                 >
                   {number(i + 1)}
@@ -193,7 +247,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
               </li>
             ))}
           </ol>
-          <p className="mt-4 text-[0.9375rem] text-ink-soft">{t('{n} of {total} answered', { n: number(answered), total: number(questions.length) })}</p>
+          <p className="mt-4 text-[0.9375rem] text-ink-soft">{t('{n} of {total} answered', { n: number(answered), total: number(activeQuestions.length) })}</p>
           <LiquidGlassButton className="mt-4 w-full" onClick={() => setPhase('done')}>
             {t('Hand in now')}
           </LiquidGlassButton>

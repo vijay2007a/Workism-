@@ -56,7 +56,11 @@ export default function Verify() {
             </Orb>
             <h1 className="mt-5 text-3xl font-bold">{title}</h1>
             {found && <p className="mt-2 text-xl font-semibold">{t(found.title)}</p>}
+            {found?.holderName && <p className="mt-1 font-medium text-ink">{found.holderName}</p>}
             <p className="mt-2 text-ink-soft">{text}</p>
+            {found?.signatureVerified && (
+              <p className="mt-2 text-xs text-good">Cryptographic signature verified ({found.signatureAlg ?? 'HMAC-SHA256'})</p>
+            )}
             <p className="mt-5 text-sm break-all text-ink-soft">
               {t('Certificate code')}: <code className="font-mono">{id}</code>
             </p>

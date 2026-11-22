@@ -1,8 +1,9 @@
-import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, GraduationCap, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useLocation } from 'react-router';
 import { useI18n } from '../lib/i18n';
 import { setSettings, useStore } from '../lib/store';
+import { useWorkspace } from '../lib/workspace';
 import { isActive, NAV } from './nav';
 
 /** `id` keeps the sliding pill of the sidebar apart from the one in the mobile drawer. */
@@ -25,6 +26,8 @@ export function NavLinks({ id, items = NAV, onNavigate }: { id: string; items?: 
 
 export function LiquidGlassSidebar() {
   const { t } = useI18n();
+  const { role } = useWorkspace();
+  const { pathname } = useLocation();
   const mini = useStore((s) => s.settings.sidebar) === 'mini';
   const Toggle = mini ? ChevronsRight : ChevronsLeft;
   return (
@@ -37,6 +40,22 @@ export function LiquidGlassSidebar() {
     >
       <ul className="flex flex-1 flex-col gap-1.5">
         <NavLinks id="side" items={NAV.slice(0, -1)} />
+        {(role === 'instructor' || role === 'admin') && (
+          <li>
+            <Link to="/instructor" className="lg-nav-item" aria-current={isActive(pathname, '/instructor') ? 'page' : undefined} title="Instructor">
+              <GraduationCap aria-hidden />
+              <span className="lg-nav-label">Instructor</span>
+            </Link>
+          </li>
+        )}
+        {role === 'admin' && (
+          <li>
+            <Link to="/admin" className="lg-nav-item" aria-current={isActive(pathname, '/admin') ? 'page' : undefined} title="Admin">
+              <ShieldCheck aria-hidden />
+              <span className="lg-nav-label">Admin</span>
+            </Link>
+          </li>
+        )}
         <li className="mt-auto" aria-hidden>
           <hr className="mx-4 mb-1 border-white/60" />
         </li>

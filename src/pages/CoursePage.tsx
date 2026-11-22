@@ -12,12 +12,13 @@ import { useToast } from '../glass/GlassToast';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
 import { LiquidProgressBar } from '../glass/LiquidProgressBar';
+import { useAuth } from '../lib/auth';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import { courseProgress, lessonState, nextLesson } from '../lib/progress';
 import { notify, setState } from '../lib/store';
 import { useWorkspace } from '../lib/workspace';
-import type { Course, Lesson, Question } from '../services';
+import { api, type Course, type Lesson, type Question } from '../services';
 import NotFound from './NotFound';
 
 export default function CoursePage() {
@@ -72,7 +73,8 @@ function Overview({ course }: { course: Course }) {
 
 function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
   const { t, number } = useI18n();
-  const { lessonsDone } = useWorkspace();
+  const { authenticated } = useAuth();
+  const { lessonsDone, retry } = useWorkspace();
   const toast = useToast();
   const go = useNavigate();
   const state = lessonState(course, lessonsDone, lesson.id);
@@ -92,13 +94,22 @@ function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
     );
   }
 
-  const complete = () => {
+  const complete = async () => {
     if (state === 'done') {
       const after = all[all.indexOf(lesson) + 1];
       return go(after ? `/learn/${course.id}/${after.id}` : `/learn/${course.id}`);
     }
     const done = [...lessonsDone, lesson.id];
     setState((s) => ({ lessons: [...new Set([...s.lessons, lesson.id])] }));
+    if (authenticated) {
+      try {
+        await api.completeLesson(course.id, lesson.id, true);
+        retry();
+      } catch {
+        toast('Could not save progress to server.', 'bad');
+        return;
+      }
+    }
     const next = nextLesson(course, done);
     if (next) toast(t('Lesson complete'));
     else {

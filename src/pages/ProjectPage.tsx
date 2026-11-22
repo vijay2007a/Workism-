@@ -21,7 +21,7 @@ import { api, NotConnected } from '../services';
 import NotFound from './NotFound';
 
 export default function ProjectPage() {
-  const { t, percent, date } = useI18n();
+  const { t, percent, date, lang } = useI18n();
   const { id = '' } = useParams();
   const { projects, retry } = useWorkspace();
   const project = projects.find((p) => p.id === id);
@@ -29,21 +29,43 @@ export default function ProjectPage() {
   const toast = useToast();
   const [repo, setRepo] = useState(saved?.repo ?? '');
   const [note, setNote] = useState(saved?.note ?? '');
+  const [uploadFile, setUploadFile] = useState<{ name: string; mime: string; base64: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   if (!project) return <NotFound inside />;
   const stage = projectStage(project, saved);
 
+  const onFilePick = async (file: File | undefined) => {
+    if (!file) return setUploadFile(null);
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be under 10 MB.');
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    setUploadFile({ name: file.name, mime: file.type || 'application/octet-stream', base64: btoa(binary) });
+    setError('');
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const problem = checkRepo(repo);
+    const link = repo.trim();
+    const problem = link ? checkRepo(link) : uploadFile ? '' : checkRepo(link);
     setError(problem);
     if (problem) return;
     setBusy(true);
-    const link = repo.trim();
     try {
-      await api.submitProject(project.id, link, note.trim());
+      await api.submitProject(
+        project.id,
+        link,
+        note.trim(),
+        uploadFile
+          ? { fileName: uploadFile.name, fileMime: uploadFile.mime, fileBase64: uploadFile.base64, languageCode: lang }
+          : { languageCode: lang },
+      );
       toast(t('Submitted for evaluation'));
       retry();
     } catch (err) {
@@ -89,6 +111,20 @@ export default function ProjectPage() {
               <LiquidGlassButton size="sm" className="justify-self-start" onClick={() => setPicking(true)}>
                 {t('Pick from my GitHub')}
               </LiquidGlassButton>
+              <div>
+                <label htmlFor="project-file" className="mb-1.5 block ps-4 text-[0.9375rem] font-medium">
+                  Project archive or report (optional: PDF, ZIP, PNG, JPEG, MD, TXT — max 10 MB)
+                </label>
+                <div className="lg-field px-4 py-2.5">
+                  <input
+                    id="project-file"
+                    type="file"
+                    accept=".pdf,.zip,.png,.jpg,.jpeg,.md,.txt"
+                    onChange={(e) => void onFilePick(e.target.files?.[0])}
+                  />
+                </div>
+                {uploadFile && <p className="mt-1 ps-4 text-sm text-ink-soft">Selected: {uploadFile.name}</p>}
+              </div>
               <div>
                 <label htmlFor="note" className="mb-1.5 block ps-4 text-[0.9375rem] font-medium">
                   {t('Notes for the reviewer (optional)')}

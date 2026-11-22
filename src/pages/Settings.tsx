@@ -12,9 +12,10 @@ import { LiquidGlassInput } from '../glass/LiquidGlassInput';
 import { LiquidGlassModal } from '../glass/LiquidGlassModal';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
 import { LiquidGlassTabs } from '../glass/LiquidGlassTabs';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { getState, resetState, setProfile, setSettings, useStore } from '../lib/store';
-import { connected, INTEGRATIONS } from '../services';
+import { api, connected, INTEGRATIONS } from '../services';
 
 const TABS = ['profile', 'preferences', 'language', 'appearance', 'notifications', 'privacy', 'integrations'] as const;
 const NAMES: Record<(typeof TABS)[number], string> = {
@@ -57,8 +58,19 @@ const useTranslated = () => {
 
 function Profile() {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const toast = useToast();
   const tr = useTranslated();
   const p = useStore((s) => s.profile);
+  const sync = async () => {
+    if (!authenticated) return;
+    try {
+      await api.updateProfile({ displayName: p.name.trim(), careerGoal: p.goal, interests: p.interests });
+      toast('Profile synced to account.');
+    } catch {
+      toast('Could not sync profile.', 'bad');
+    }
+  };
   return (
     <div className="grid gap-6">
       <LiquidGlassInput label={t('Name')} icon={<User aria-hidden />} autoComplete="name" maxLength={60} value={p.name} onChange={(e) => setProfile({ name: e.target.value })} />
@@ -73,6 +85,11 @@ function Profile() {
           onChange={(v) => setProfile({ interests: p.interests.includes(v) ? p.interests.filter((x) => x !== v) : [...p.interests, v] })}
         />
       </Group>
+      {authenticated && (
+        <LiquidGlassButton variant="primary" className="justify-self-start" onClick={() => void sync()}>
+          Save profile to account
+        </LiquidGlassButton>
+      )}
     </div>
   );
 }

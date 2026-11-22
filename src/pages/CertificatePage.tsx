@@ -1,4 +1,5 @@
-import { ArrowRight, Download, Link2, Share2 } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, BadgeCheck, Download, Link2, Share2 } from 'lucide-react';
 import { useParams } from 'react-router';
 import { CertificatePreview, QrCode } from '../components/CertificateCard';
 import { PageHeader } from '../components/PageHeader';
@@ -6,10 +7,11 @@ import { SampleTag } from '../components/SampleTag';
 import { useToast } from '../glass/GlassToast';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { certificateStatus } from '../lib/progress';
 import { useWorkspace } from '../lib/workspace';
-import type { Certificate } from '../services';
+import { api, type Certificate } from '../services';
 import { CertificateChecklist, useCertificateSteps } from './Certificates';
 import NotFound from './NotFound';
 
@@ -21,10 +23,34 @@ export default function CertificatePage() {
 
 function Detail({ certificate }: { certificate: Certificate }) {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
   const toast = useToast();
+  const [issuing, setIssuing] = useState(false);
   const issued = certificateStatus(certificate) === 'verified';
-  const todo = useCertificateSteps(certificate).find((s) => !s.done);
+  const steps = useCertificateSteps(certificate);
+  const todo = steps.find((s) => !s.done);
   const link = `${location.origin}/verify/${certificate.id}`;
+
+  const issue = async () => {
+    setIssuing(true);
+    try {
+      await api.issueCertificate(certificate.templateId ?? certificate.id);
+      toast('Certificate issued and cryptographically signed.');
+      retry();
+    } catch {
+      toast('Eligibility requirements are not yet confirmed on the server.', 'bad');
+    }
+    setIssuing(false);
+  };
+
+  const downloadPdf = () => {
+    if (authenticated && certificate.source === 'api') {
+      open(api.certificatePdfUrl(certificate.id), '_blank', 'noopener,noreferrer');
+      return;
+    }
+    print();
+  };
 
   const copy = () =>
     navigator.clipboard.writeText(link).then(
@@ -48,16 +74,20 @@ function Detail({ certificate }: { certificate: Certificate }) {
             {!issued && (
               <>
                 <CertificateChecklist certificate={certificate} />
-                {todo && (
+                {todo ? (
                   <LiquidGlassButton variant="primary" className="mt-5 w-full" to={todo.to} icon={<ArrowRight className="order-1 rtl:-scale-x-100" aria-hidden />}>
                     {t('Next step')}
+                  </LiquidGlassButton>
+                ) : authenticated && (
+                  <LiquidGlassButton variant="primary" className="mt-5 w-full" loading={issuing} onClick={() => void issue()} icon={<BadgeCheck aria-hidden />}>
+                    Issue verified certificate
                   </LiquidGlassButton>
                 )}
                 <hr className="my-5 border-white/70" />
               </>
             )}
             <div className="grid gap-3">
-              <LiquidGlassButton disabled={!issued} icon={<Download aria-hidden />} onClick={() => print()}>
+              <LiquidGlassButton disabled={!issued} icon={<Download aria-hidden />} onClick={downloadPdf}>
                 {t('Download PDF')}
               </LiquidGlassButton>
               {issued && 'share' in navigator && (

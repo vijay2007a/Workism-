@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Chip } from '../glass/controls';
@@ -15,25 +15,27 @@ export default function Admin() {
   const [users, setUsers] = useState<RemoteProfile[]>([]);
   const [logs, setLogs] = useState<{ id: string; action: string; resource_type: string; resource_id: string | null; created_at: string }[]>([]);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   const allowed = role === 'admin';
 
-  const load = useCallback(async () => {
-    if (!allowed) return;
-    try {
-      const [ov, us, al] = await Promise.all([api.adminOverview(), api.adminUsers(), api.adminAuditLogs()]);
-      setOverview(ov);
-      setUsers(us.users);
-      setLogs(al.logs);
-      setError('');
-    } catch {
-      setError('Could not load administrator data.');
-    }
-  }, [allowed]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!allowed) return;
+    let live = true;
+    Promise.all([api.adminOverview(), api.adminUsers(), api.adminAuditLogs()]).then(
+      ([ov, us, al]) => {
+        if (!live) return;
+        setOverview(ov);
+        setUsers(us.users);
+        setLogs(al.logs);
+        setError('');
+      },
+      () => live && setError('Could not load administrator data.'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [allowed, reload]);
 
   if (!allowed) {
     return (
@@ -50,7 +52,7 @@ export default function Admin() {
     try {
       await api.setUserRole(userId, nextRole);
       toast(`Updated role to ${nextRole}`);
-      await load();
+      setReload((n) => n + 1);
     } catch {
       toast('Could not change role.', 'bad');
     }

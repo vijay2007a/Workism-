@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Chip } from '../glass/controls';
@@ -29,24 +29,26 @@ export default function Instructor() {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [score, setScore] = useState<Record<string, number>>({});
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   const allowed = role === 'instructor' || role === 'admin';
 
-  const load = useCallback(async () => {
-    if (!allowed) return;
-    try {
-      const [ov, subs] = await Promise.all([api.instructorOverview(), api.instructorSubmissions()]);
-      setCounts(ov.counts);
-      setSubmissions(subs.submissions);
-      setError('');
-    } catch {
-      setError('Could not load instructor queue. Sign in with an instructor or administrator account.');
-    }
-  }, [allowed]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!allowed) return;
+    let live = true;
+    Promise.all([api.instructorOverview(), api.instructorSubmissions()]).then(
+      ([ov, subs]) => {
+        if (!live) return;
+        setCounts(ov.counts);
+        setSubmissions(subs.submissions);
+        setError('');
+      },
+      () => live && setError('Could not load instructor queue. Sign in with an instructor or administrator account.'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [allowed, reload]);
 
   if (!allowed) {
     return (
@@ -69,7 +71,7 @@ export default function Instructor() {
         approved,
       });
       toast(approved ? 'Project verified' : 'Feedback sent');
-      await load();
+      setReload((n) => n + 1);
     } catch {
       toast('Review failed. Check your assigned project scope.', 'bad');
     }

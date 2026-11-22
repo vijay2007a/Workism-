@@ -3,8 +3,12 @@
   "private": true,
   "version": "3.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
+    "dev:api": "node --env-file-if-exists=.env.local server/dev-server.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "oxlint",

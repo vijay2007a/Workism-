@@ -9,10 +9,17 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "node --test \"src/**/*.test.ts\" \"server/**/*.test.ts\"",
+    "test:frontend": "node --test \"src/**/*.test.ts\"",
+    "test:backend": "node --test \"server/**/*.test.ts\"",
+    "scan:secrets": "node scripts/secret-scan.ts --all",
+    "scan:staged": "node scripts/secret-scan.ts --staged",
+    "scan:dist": "node scripts/secret-scan.ts --dist"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
+    "@google/genai": "^3.6.1",
+    "@supabase/supabase-js": "^2.119.2",
     "clsx": "^2.1.1",
     "lucide-react": "^1.77.0",
     "motion": "^14.14.0",
@@ -22,7 +29,8 @@
     "react-router": "^8.5.2",
     "recharts": "^3.11.0",
     "tailwind-merge": "^3.7.1",
-    "uqr": "^0.1.3"
+    "uqr": "^0.1.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",

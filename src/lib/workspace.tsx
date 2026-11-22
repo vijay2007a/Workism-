@@ -66,7 +66,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [attempt, authReady, authenticated]);
 
   const retry = useCallback(() => {
-    setStatus('loading');
+    setStatus((current) => current === 'ready' ? 'ready' : 'loading');
     setAttempt((n) => n + 1);
   }, []);
 

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { parseState, type AppState, type Notice } from './state';
 
 const KEY = 'workism:v1';
+const hosted = Boolean(import.meta.env.VITE_API_URL || (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY));
 const read = () => {
   try {
     return localStorage.getItem(KEY);
@@ -10,7 +11,8 @@ const read = () => {
   }
 };
 
-let state = parseState(read());
+let state = parseState(hosted ? null : read());
+let activeAccount: string | null = null;
 const listeners = new Set<() => void>();
 const subscribe = (fn: () => void) => {
   listeners.add(fn);
@@ -18,12 +20,19 @@ const subscribe = (fn: () => void) => {
 };
 const emit = () => listeners.forEach((fn) => fn());
 
+export function switchAccount(account: string | null) {
+  if (!hosted || account === activeAccount) return;
+  activeAccount = account;
+  state = parseState(null);
+  emit();
+}
+
 export const getState = () => state;
 
 export function setState(patch: (s: AppState) => Partial<AppState>) {
   state = { ...state, ...patch(state) };
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    if (!hosted) localStorage.setItem(KEY, JSON.stringify(state));
   } catch { /* storage blocked or full: keep the in-memory state */ }
   emit();
 }
@@ -47,7 +56,7 @@ export function resetState() {
 export const useStore = <T,>(pick: (s: AppState) => T) => useSyncExternalStore(subscribe, () => pick(state));
 
 window.addEventListener('storage', (e) => {
-  if (e.key !== KEY) return;
+  if (hosted || e.key !== KEY) return;
   state = parseState(e.newValue);
   emit();
 });

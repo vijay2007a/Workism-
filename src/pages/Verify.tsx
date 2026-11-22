@@ -10,12 +10,16 @@ import { Aurora } from '../glass/LiquidGlassShell';
 import { LoadingSkeleton } from '../glass/LoadingSkeleton';
 import { useI18n } from '../lib/i18n';
 import { certificateStatus } from '../lib/progress';
-import { api, NotConnected, type Certificate } from '../services';
+import { api, ApiRequestError, type Certificate } from '../services';
 
 /** Public page behind every QR code. Says "verified" only when the API has just confirmed it. */
 export default function Verify() {
-  const { t, date } = useI18n();
   const { id = '' } = useParams();
+  return <Verification key={id} id={id} />;
+}
+
+function Verification({ id }: { id: string }) {
+  const { t, date } = useI18n();
   const [found, setFound] = useState<Certificate>();
   const [problem, setProblem] = useState<'' | 'offline' | 'missing'>('');
 
@@ -23,7 +27,7 @@ export default function Verify() {
     let live = true;
     api.verifyCertificate(id).then(
       (c) => live && setFound(c),
-      (e) => live && setProblem(e instanceof NotConnected ? 'offline' : 'missing'),
+      (e) => live && setProblem(e instanceof ApiRequestError && (e.status === 404 || e.status === 409) ? 'missing' : 'offline'),
     );
     return () => {
       live = false;

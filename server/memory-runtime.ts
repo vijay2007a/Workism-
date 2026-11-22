@@ -44,6 +44,7 @@ export interface MemoryRuntimeOptions {
  */
 export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
   const aiDailyQuota = opts.aiDailyQuota ?? 40;
+  const uploads = new Map<string, Blob>();
   const users = new Map<string, StoredUser>();
   const tokens = new Map<string, string>(); // token -> userId
   const profiles = new Map<string, ProfileRecord>();
@@ -121,7 +122,7 @@ export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
     hours: p.hours,
     brief: p.brief,
     requirements: [...p.requirements],
-    rubric: p.rubric.map((criterion) => ({ criterion, description: criterion, maxPoints: 33 })),
+    rubric: p.rubric.map((criterion, index) => ({ criterion, description: criterion, maxPoints: index === 0 ? 40 : 30 })),
     instructorId: null,
   }));
 
@@ -305,7 +306,13 @@ export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
       async createSignedUploadUrl(_userId, objectPath) {
         return { signedUrl: `https://storage.test/upload/${encodeURIComponent(objectPath)}`, path: objectPath, expiresInSeconds: 120 };
       },
-      async uploadBytes(objectPath) {
+      async readUpload(path) {
+        const file = uploads.get(path);
+        if (!file) throw new ApiError(400, 'upload_missing', 'The uploaded file could not be read.');
+        return file;
+      },
+      async uploadBytes(objectPath, bytes, type) {
+        uploads.set(objectPath, new Blob([Uint8Array.from(bytes)], { type }));
         return { path: objectPath };
       },
       async createSignedDownloadUrl(objectPath) {

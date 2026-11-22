@@ -15,7 +15,7 @@ Browser (React + Vite SPA)
              ├── server/supabase-runtime.ts
              │     ├── RLS-scoped client (publishable key + user Bearer JWT)
              │     └── Privileged client (SUPABASE_SECRET_KEY — server-only trusted ops)
-             ├── server/ai.ts              (@google/genai gemini-2.5-flash, quotas, timeouts, 18 languages)
+             ├── server/ai.ts              (@google/genai gemini-3.5-flash-lite, quotas, timeouts, 18 languages)
              ├── server/certificates.ts    (Eligibility checks, HMAC-SHA256 signing, PDF 1.4 generator)
              ├── server/uploads.ts         (Filename sanitization, magic bytes, Zip Slip inspection)
              ├── server/execution.ts       (External isolated sandbox boundary; explicit unavailable state)

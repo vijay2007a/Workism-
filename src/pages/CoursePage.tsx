@@ -34,6 +34,9 @@ export default function CoursePage() {
 function Overview({ course }: { course: Course }) {
   const { t, percent, number } = useI18n();
   const { lessonsDone } = useWorkspace();
+  const { authenticated } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
   const progress = courseProgress(course, lessonsDone);
   const next = nextLesson(course, lessonsDone);
   return (
@@ -57,7 +60,12 @@ function Overview({ course }: { course: Course }) {
         <LearningRoadmap course={course} />
         <div className="mt-6 flex flex-wrap gap-3">
           {next ? (
-            <LiquidGlassButton variant="primary" to={`/learn/${course.id}/${next.id}`} icon={<Play className="rtl:-scale-x-100" fill="currentColor" strokeWidth={0} aria-hidden />}>
+            <LiquidGlassButton variant="primary" onClick={async () => {
+              try {
+                if (authenticated) await api.enrollCourse(course.id);
+                navigate(`/learn/${course.id}/${next.id}`);
+              } catch { toast('Could not enroll in the course.', 'bad'); }
+            }} icon={<Play className="rtl:-scale-x-100" fill="currentColor" strokeWidth={0} aria-hidden />}>
               {progress.percent ? t('Continue') : t('Start course')}
             </LiquidGlassButton>
           ) : (
@@ -78,7 +86,8 @@ function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
   const toast = useToast();
   const go = useNavigate();
   const state = lessonState(course, lessonsDone, lesson.id);
-  const [answered, setAnswered] = useState(false);
+  const [answer, setAnswer] = useState<number>();
+  const answered = answer === lesson.check.answer;
   const { openAssistant } = useFrame();
   const all = course.modules.flatMap((m) => m.lessons);
   const current = nextLesson(course, lessonsDone);
@@ -100,16 +109,17 @@ function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
       return go(after ? `/learn/${course.id}/${after.id}` : `/learn/${course.id}`);
     }
     const done = [...lessonsDone, lesson.id];
-    setState((s) => ({ lessons: [...new Set([...s.lessons, lesson.id])] }));
+    if (!answered || answer === undefined) return;
     if (authenticated) {
       try {
-        await api.completeLesson(course.id, lesson.id, true);
+        await api.completeLesson(course.id, lesson.id, answer);
         retry();
       } catch {
         toast('Could not save progress to server.', 'bad');
         return;
       }
     }
+    if (!authenticated) setState((s) => ({ lessons: [...new Set([...s.lessons, lesson.id])] }));
     const next = nextLesson(course, done);
     if (next) toast(t('Lesson complete'));
     else {
@@ -139,7 +149,7 @@ function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
               </div>
             )}
           </LiquidGlassPanel>
-          <Practice question={lesson.check} onAnswer={() => setAnswered(true)} />
+          <Practice question={lesson.check} onAnswer={setAnswer} />
           <div className="flex flex-wrap items-center gap-4">
             <LiquidGlassButton variant="primary" size="lg" onClick={complete} disabled={state === 'current' && !answered} icon={<ArrowRight className="order-1 rtl:-scale-x-100" aria-hidden />}>
               {state === 'done' ? t('Next lesson') : t('Complete and continue')}
@@ -181,7 +191,7 @@ function LessonPlayer({ course, lesson }: { course: Course; lesson: Lesson }) {
   );
 }
 
-function Practice({ question, onAnswer }: { question: Question; onAnswer: () => void }) {
+function Practice({ question, onAnswer }: { question: Question; onAnswer: (index: number) => void }) {
   const { t } = useI18n();
   const [picked, setPicked] = useState<number>();
   const right = picked === question.answer;
@@ -198,7 +208,7 @@ function Practice({ question, onAnswer }: { question: Question; onAnswer: () => 
             data-mark={picked === i ? (right ? 'right' : 'wrong') : undefined}
             onClick={() => {
               setPicked(i);
-              onAnswer();
+              onAnswer(i);
             }}
           >
             {o}

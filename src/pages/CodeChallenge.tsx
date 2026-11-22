@@ -32,7 +32,7 @@ export default function CodeChallenge() {
 
   const run = async () => {
     setBusy(true);
-    if (!language.runs && authenticated) {
+    if (authenticated) {
       try {
         const remote = await api.executeCode(challenge.id, language.id, code);
         setOutcome(remote.publicResults ? { results: remote.publicResults } : { error: remote.error || remote.message || 'Remote sandbox unavailable.' });
@@ -48,17 +48,6 @@ export default function CodeChallenge() {
     if (!r.results) return;
     const passed = r.results.filter((x) => x.ok).length;
     setState((s) => ({ code: { ...s.code, [challenge.id]: { passed, total: r.results!.length, at: Date.now() } } }));
-    if (authenticated) {
-      void api.recordCodeSubmission({
-        challengeId: challenge.id,
-        languageId: language.id,
-        code,
-        executionMode: 'browser_js',
-        passedCount: passed,
-        totalCount: r.results.length,
-        results: r.results,
-      }).catch(() => {});
-    }
     if (passed === r.results.length) notify({ id: `code-${challenge.id}`, text: 'All tests passed on a coding challenge.', to: `/assessments/code/${challenge.id}` });
   };
 
@@ -115,7 +104,7 @@ export default function CodeChallenge() {
           <p id={`${editor}-keys`} className="mt-2 text-sm text-ink-soft">
             {t('Tab indents. Press Escape, then Tab, to leave the editor.')}
           </p>
-          {!language.runs && (
+          {!authenticated && !language.runs && (
             <div className="mt-4">
               <NeedsIntegration>{t('{name} is editor-only for now: running it needs the WORKISM execution service. JavaScript runs in this browser.', { name: language.name })}</NeedsIntegration>
             </div>

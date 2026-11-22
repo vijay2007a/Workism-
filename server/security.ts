@@ -75,10 +75,26 @@ export async function parseJsonBody<T>(req: Request, schema: ZodType<T>, maxByte
   if (lenHeader && Number(lenHeader) > maxBytes) {
     throw new ApiError(413, 'payload_too_large', 'Request payload exceeds the size limit.');
   }
-  const raw = await req.text();
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
-    throw new ApiError(413, 'payload_too_large', 'Request payload exceeds the size limit.');
+  const chunks: Uint8Array[] = [];
+  const reader = req.body?.getReader();
+  let size = 0;
+  if (reader) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > maxBytes) {
+          await reader.cancel();
+          throw new ApiError(413, 'payload_too_large', 'Request payload exceeds the size limit.');
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
+  const raw = Buffer.concat(chunks).toString('utf8');
   let parsed: unknown;
   try {
     parsed = raw ? JSON.parse(raw) : {};

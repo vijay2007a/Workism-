@@ -25,7 +25,7 @@ export function readEnv(source: Record<string, string | undefined> = process.env
     supabasePublishableKey: clean(source.SUPABASE_PUBLISHABLE_KEY) || clean(source.VITE_SUPABASE_PUBLISHABLE_KEY),
     supabaseSecretKey: clean(source.SUPABASE_SECRET_KEY) || clean(source.SUPABASE_SERVICE_ROLE_KEY),
     geminiApiKey: clean(source.GEMINI_API_KEY),
-    geminiModel: clean(source.GEMINI_MODEL) || 'gemini-2.5-flash',
+    geminiModel: clean(source.GEMINI_MODEL) || 'gemini-3.5-flash-lite',
     certificateSigningSecret: clean(source.CERTIFICATE_SIGNING_SECRET),
     allowedOrigins,
     codeExecutionUrl: clean(source.CODE_EXECUTION_URL),

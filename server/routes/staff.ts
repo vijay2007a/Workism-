@@ -46,6 +46,23 @@ export const staffRoutes: RouteDef[] = [
   // --- Instructor endpoints ---
   {
     method: 'GET',
+    pattern: '/api/instructor/submissions/:id/file',
+    async handler(ctx) {
+      const staff = await requireRole(ctx, ['instructor', 'admin']);
+      await enforceRateLimit(ctx, 'instructor:file', staff.id, 30, 600);
+      const sub = await ctx.runtime.db.getProjectSubmission(ctx.params.id, staff);
+      if (!sub?.storagePath || !sub.storagePath.startsWith(sub.userId + '/' + sub.projectId + '/') ||
+          sub.storagePath.includes('..') || sub.storagePath.includes('\\')) {
+        throw new ApiError(404, 'file_not_found', 'Submission file is unavailable.');
+      }
+      if (staff.role !== 'admin' && !(await ctx.runtime.db.isInstructorForProject(staff.id, sub.projectId))) {
+        throw new ApiError(403, 'forbidden', 'This project is outside your review assignments.');
+      }
+      return jsonResponse(await ctx.runtime.storage.createSignedDownloadUrl(sub.storagePath), 200, ctx.headers);
+    },
+  },
+  {
+    method: 'GET',
     pattern: '/api/instructor/overview',
     async handler(ctx) {
       const staff = await requireRole(ctx, ['instructor', 'admin']);
@@ -87,6 +104,13 @@ export const staffRoutes: RouteDef[] = [
         if (!scoped) throw new ApiError(403, 'forbidden', 'You are not assigned to review this project.');
       }
       const body = await parseJsonBody(ctx.req, ReviewSubmissionSchema);
+      const projects = await ctx.runtime.db.listProjects();
+      const rubric = projects.find((p) => p.id === sub.projectId)?.rubric ?? [];
+      if (!rubric.length || body.rubricScores.length !== rubric.length ||
+          !rubric.every((criterion) => body.rubricScores.some((score) => score.criterion === criterion.criterion &&
+            score.maxPoints === criterion.maxPoints && score.score <= criterion.maxPoints))) {
+        throw new ApiError(400, 'invalid_rubric', 'Score each project criterion using its published point limit.');
+      }
       const earned = body.rubricScores.reduce((acc, r) => acc + r.score, 0);
       const max = body.rubricScores.reduce((acc, r) => acc + r.maxPoints, 0);
       const totalScore = max > 0 ? Math.min(100, Math.round((earned / max) * 100)) : 0;

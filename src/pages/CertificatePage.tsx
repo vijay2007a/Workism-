@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, BadgeCheck, Download, Link2, Share2 } from 'lucide-react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { CertificatePreview, QrCode } from '../components/CertificateCard';
 import { PageHeader } from '../components/PageHeader';
 import { SampleTag } from '../components/SampleTag';
@@ -24,6 +24,7 @@ export default function CertificatePage() {
 function Detail({ certificate }: { certificate: Certificate }) {
   const { t } = useI18n();
   const { authenticated } = useAuth();
+  const navigate = useNavigate();
   const { retry } = useWorkspace();
   const toast = useToast();
   const [issuing, setIssuing] = useState(false);
@@ -35,9 +36,10 @@ function Detail({ certificate }: { certificate: Certificate }) {
   const issue = async () => {
     setIssuing(true);
     try {
-      await api.issueCertificate(certificate.templateId ?? certificate.id);
+      const result = await api.issueCertificate(certificate.templateId ?? certificate.id);
       toast('Certificate issued and cryptographically signed.');
       retry();
+      navigate(`/certificates/${result.certificate.verificationCode}`, { replace: true });
     } catch {
       toast('Eligibility requirements are not yet confirmed on the server.', 'bad');
     }

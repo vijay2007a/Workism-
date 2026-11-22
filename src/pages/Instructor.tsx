@@ -26,6 +26,7 @@ export default function Instructor() {
   const toast = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
+  const [projects, setProjects] = useState<Awaited<ReturnType<typeof api.instructorOverview>>['projects']>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [score, setScore] = useState<Record<string, number>>({});
   const [error, setError] = useState('');
@@ -40,6 +41,7 @@ export default function Instructor() {
       ([ov, subs]) => {
         if (!live) return;
         setCounts(ov.counts);
+        setProjects(ov.projects);
         setSubmissions(subs.submissions);
         setError('');
       },
@@ -62,11 +64,15 @@ export default function Instructor() {
   }
 
   const review = async (sub: SubmissionRow, approved: boolean) => {
-    const pts = Math.max(0, Math.min(100, score[sub.id] ?? 85));
+    const rubric = projects.find((p) => p.id === sub.projectId)?.rubric ?? [];
+    if (!rubric.length || rubric.some((r) => !Number.isFinite(score[sub.id + r.criterion]))) {
+      toast('Enter a score for each criterion.', 'bad');
+      return;
+    }
     const text = (feedback[sub.id] ?? '').trim() || (approved ? 'Meets rubric requirements.' : 'Please address the rubric feedback and resubmit.');
     try {
       await api.reviewSubmission(sub.id, {
-        rubricScores: [{ criterion: 'Overall Rubric', score: pts, maxPoints: 100, comment: text }],
+        rubricScores: rubric.map((r) => ({ ...r, score: score[sub.id + r.criterion], comment: text })),
         feedback: text,
         approved,
       });
@@ -99,22 +105,24 @@ export default function Instructor() {
                   <div>
                     <p className="font-bold">{s.projectId} · v{s.version}</p>
                     {s.repoUrl && <a href={s.repoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-deep underline">{s.repoUrl}</a>}
-                    {s.fileName && <p className="text-sm text-ink-soft">File: {s.fileName}</p>}
+                    {s.fileName && <button type="button" className="text-sm underline" onClick={async () => {
+                      try {
+                        const { signedUrl } = await api.submissionFile(s.id);
+                        location.assign(signedUrl);
+                      } catch { toast('Could not open the submission file.', 'bad'); }
+                    }}>{s.fileName}</button>}
                   </div>
                   <Chip tone={s.status === 'verified' ? 'good' : 'violet'}>{s.status}</Chip>
                 </div>
                 {s.note && <p className="text-sm text-ink-soft">Student note: {s.note}</p>}
                 <div className="grid gap-3 tab:grid-cols-[8rem_1fr]">
-                  <div className="lg-field">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      aria-label="Score percent"
-                      value={score[s.id] ?? s.overallScore ?? 85}
-                      onChange={(e) => setScore({ ...score, [s.id]: Number(e.target.value) })}
-                    />
-                  </div>
+                  {projects.find((p) => p.id === s.projectId)?.rubric.map((r) => (
+                    <label key={r.criterion}>{r.criterion} (0–{r.maxPoints})
+                      <input className="lg-field" type="number" min={0} max={r.maxPoints}
+                        value={score[s.id + r.criterion] ?? ''}
+                        onChange={(e) => setScore({ ...score, [s.id + r.criterion]: e.target.valueAsNumber })} />
+                    </label>
+                  ))}
                   <div className="lg-field">
                     <input
                       type="text"

@@ -28,6 +28,7 @@ export function sanitizeFilename(raw: string): string {
 
 export function validateUploadMetadata(fileName: string, mimeType: string, sizeBytes: number): { safeName: string; mime: string } {
   const safeName = sanitizeFilename(fileName);
+  if (mimeType === 'application/zip') throw new ApiError(415, 'archive_scanner_unavailable', 'Archive uploads require a configured malware scanner. Submit a repository link instead.');
   const spec = ALLOWED_UPLOAD_TYPES[mimeType];
   if (!spec) {
     throw new ApiError(400, 'unsupported_mime', 'File type is not supported. Allowed: PDF, ZIP, PNG, JPEG, TXT, MD.');
@@ -98,6 +99,6 @@ function inspectZipSafety(bytes: Uint8Array): void {
 
 export function buildSubmissionStoragePath(userId: string, projectId: string, safeName: string): string {
   const cleanProject = projectId.replace(/[^a-z0-9-]/gi, '');
-  const stamp = Date.now();
+  const stamp = crypto.randomUUID();
   return `${userId}/${cleanProject}/${stamp}-${safeName}`;
 }

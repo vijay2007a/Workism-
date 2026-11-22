@@ -23,7 +23,7 @@ const ProjectSubmitSchema = z.object({
   fileName: z.string().trim().max(200).optional(),
   fileSizeBytes: z.number().int().positive().optional(),
   fileMime: z.string().trim().max(100).optional(),
-  fileBase64: z.string().max(14_000_000).optional(), // Optional inline upload validation
+  fileBase64: z.string().max(4_194_304).optional(), // Optional inline upload validation
   note: z.string().trim().max(1000).default(''),
   languageCode: z.string().trim().min(2).max(8).optional(),
 }).refine((v) => Boolean(v.repo || v.storagePath || v.fileBase64), {
@@ -131,7 +131,7 @@ export const projectsCertsRoutes: RouteDef[] = [
       const project = projects.find((p) => p.id === ctx.params.id);
       if (!project) throw new ApiError(404, 'project_not_found', 'Project not found.');
 
-      const body = await parseJsonBody(ctx.req, ProjectSubmitSchema, 15_000_000);
+      const body = await parseJsonBody(ctx.req, ProjectSubmitSchema, 4_200_000);
       const repoUrl = body.repo?.trim() || null;
       if (repoUrl && !isSafeGithubRepoUrl(repoUrl)) {
         throw new ApiError(400, 'invalid_repo_url', 'Only plain https://github.com/owner/repo URLs are accepted.');
@@ -142,9 +142,10 @@ export const projectsCertsRoutes: RouteDef[] = [
       let fileSizeBytes: number | null = body.fileSizeBytes ?? null;
       let fileMime: string | null = body.fileMime ?? null;
 
-      if (storagePath && (!storagePath.startsWith(`${user.id}/`) || storagePath.includes('..') || storagePath.includes('\\'))) {
+      if (storagePath && (!storagePath.startsWith(`${user.id}/${project.id}/`) || storagePath.includes('..') || storagePath.includes('\\'))) {
         throw new ApiError(403, 'forbidden_storage_path', 'Storage path must belong to your own account.');
       }
+      let excerpt: string | null = null;
       if (body.fileBase64) {
         if (!fileName || !fileMime) {
           throw new ApiError(400, 'validation_error', 'fileName and fileMime are required when uploading a file.');
@@ -152,14 +153,23 @@ export const projectsCertsRoutes: RouteDef[] = [
         const bytes = Buffer.from(body.fileBase64, 'base64');
         const meta = validateUploadMetadata(fileName, fileMime, bytes.byteLength);
         validateUploadBytes(bytes, meta.mime);
+        if (meta.mime.startsWith('text/')) excerpt = bytes.subarray(0, 3500).toString('utf8');
         fileName = meta.safeName;
         fileSizeBytes = bytes.byteLength;
         fileMime = meta.mime;
         const targetPath = buildSubmissionStoragePath(user.id, project.id, meta.safeName);
         const stored = await ctx.runtime.storage.uploadBytes(targetPath, new Uint8Array(bytes), meta.mime);
         storagePath = stored.path;
-      } else if (storagePath && fileName && fileMime && fileSizeBytes) {
+      } else if (storagePath) {
+        if (!fileName || !fileMime || !fileSizeBytes) throw new ApiError(400, 'missing_metadata', 'Uploaded file details are required.');
         const meta = validateUploadMetadata(fileName, fileMime, fileSizeBytes);
+        const file = await ctx.runtime.storage.readUpload(storagePath);
+        if (file.size !== fileSizeBytes || file.type.split(';')[0] !== meta.mime || !storagePath.endsWith('-' + meta.safeName)) {
+          throw new ApiError(400, 'upload_mismatch', 'Stored file details differ from the submission.');
+        }
+        const bytes = Buffer.from(await file.arrayBuffer());
+        validateUploadBytes(bytes, meta.mime);
+        if (meta.mime.startsWith('text/')) excerpt = bytes.subarray(0, 3500).toString('utf8');
         fileName = meta.safeName;
       }
 
@@ -175,7 +185,7 @@ export const projectsCertsRoutes: RouteDef[] = [
           systemPrompt: [
             'You are a constructive project reviewer.',
             multilingualInstruction(lang),
-            'Provide rubric-based review guidance and questions to check before instructor approval.',
+            'Evaluate only the submitted text and notes provided. A filename or URL alone supplies no evidence about contents. Return JSON with observations and nextSteps arrays of short strings.',
             'CRITICAL: Do NOT claim automated tests passed and do NOT approve or verify the project.',
           ].join(' '),
           userPrompt: JSON.stringify({
@@ -185,12 +195,17 @@ export const projectsCertsRoutes: RouteDef[] = [
             repoUrl,
             fileName,
             studentNote: body.note,
+            submittedText: excerpt,
           }),
           maxOutputTokens: 500,
         });
-        aiFeedback = aiRes.text;
+        const feedback = z.object({
+          observations: z.array(z.string().trim().min(1).max(400)).min(1).max(5),
+          nextSteps: z.array(z.string().trim().min(1).max(400)).min(1).max(5),
+        }).parse(JSON.parse(aiRes.text));
+        aiFeedback = [...feedback.observations, ...feedback.nextSteps].join('\n');
       } catch {
-        aiFeedback = 'Submission received and queued for instructor rubric review. Automated repository tests were not executed.';
+        aiFeedback = null;
       }
 
       const submission = await ctx.runtime.db.createProjectSubmission({
@@ -281,7 +296,8 @@ export const projectsCertsRoutes: RouteDef[] = [
         });
       }
 
-      const holderName = (profile?.displayName || user.displayName || user.email).trim();
+      const holderName = (profile?.displayName || user.displayName || '').trim();
+      if (!holderName) throw new ApiError(400, 'display_name_required', 'Choose a public certificate name in your profile first.');
       const skillName = skills.find((s) => s.id === template.skillId)?.name ?? template.skillId;
       const verificationCode = generateVerificationCode();
       const issuedAt = new Date().toISOString();
@@ -291,6 +307,7 @@ export const projectsCertsRoutes: RouteDef[] = [
         userId: user.id,
         holderName,
         title: template.title,
+        skillName,
         issuedAt,
       };
       const signatureHex = signCertificatePayload(signaturePayload, ctx.env.certificateSigningSecret);

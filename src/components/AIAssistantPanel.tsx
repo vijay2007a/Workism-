@@ -33,7 +33,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           await new Promise((r) => setTimeout(r, 650));
           reply = { text: guide.answer, guide: true, fresh: true };
         } else {
-          reply = { ...(await api.ask(history.filter((e) => !e.error).map(({ role, text }) => ({ role, text })), lang)), fresh: true };
+          reply = { ...(await api.ask(history.filter((e) => !e.error).slice(-8).map(({ role, text }) => ({ role, text })), lang)), fresh: true };
         }
       } catch (e) {
         reply = {

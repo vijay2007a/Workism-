@@ -34,6 +34,7 @@ async function apiCall(
 test('full 14-step WORKISM student lifecycle: register -> assess -> roadmap -> lessons -> project -> review -> signed certificate -> verify -> revoke -> portfolio', async () => {
   const mem = createMemoryRuntime({
     aiResponder: ({ endpoint, languageCode }) => {
+      if (endpoint === 'project_feedback') return JSON.stringify({ observations: ['The note describes keyboard tests.'], nextSteps: ['Include the accessibility report.'] });
       if (endpoint === 'ai_roadmap') {
         return JSON.stringify({
           summary: `Roadmap in ${languageCode}`,
@@ -118,13 +119,18 @@ test('full 14-step WORKISM student lifecycle: register -> assess -> roadmap -> l
   // 8-9. Complete lesson js-1, verify sequential lock on js-3, generate AI roadmap skipping js-1, then complete remaining lessons
   const locked = await apiCall(app, 'POST', '/api/lessons/js-3/complete', {
     token,
-    body: { courseId: 'javascript-foundations', checkPassed: true },
+    body: { courseId: 'javascript-foundations', answerIndex: 1 },
   });
   assert.equal(locked.status, 409);
 
+  const wrongCheck = await apiCall(app, 'POST', '/api/lessons/js-1/complete', {
+    token, body: { courseId: 'javascript-foundations', answerIndex: 99 },
+  });
+  assert.equal(wrongCheck.status, 422);
+
   const done1 = await apiCall(app, 'POST', '/api/lessons/js-1/complete', {
     token,
-    body: { courseId: 'javascript-foundations', checkPassed: true },
+    body: { courseId: 'javascript-foundations', answerIndex: 1 },
   });
   assert.equal(done1.status, 200);
 
@@ -138,7 +144,7 @@ test('full 14-step WORKISM student lifecycle: register -> assess -> roadmap -> l
   for (const lid of ['js-2', 'js-3', 'js-4', 'js-5']) {
     const r = await apiCall(app, 'POST', `/api/lessons/${lid}/complete`, {
       token,
-      body: { courseId: 'javascript-foundations', checkPassed: true },
+      body: { courseId: 'javascript-foundations', answerIndex: 1 },
     });
     assert.equal(r.status, 200);
   }

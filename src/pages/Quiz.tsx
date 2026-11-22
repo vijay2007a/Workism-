@@ -40,6 +40,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
   const [serverAttempt, setServerAttempt] = useState<AssessmentAttemptStart | null>(null);
   const [serverResult, setServerResult] = useState<AssessmentSubmissionResult | null>(null);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const activeQuestions = serverAttempt
     ? serverAttempt.questions.map((q) => ({ q: q.prompt, options: q.options, answer: -1, why: '' }))
@@ -54,13 +55,16 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
       setPhase('running');
       return;
     }
+    setError('');
     setStarting(true);
     try {
       const started = await api.startAssessment(skill.id, lang);
       setServerAttempt(started);
       setLeft(started.attempt.timeLimitSeconds);
     } catch {
-      // Fallback to local practice questions if server attempt unavailable
+      setError('Could not start the assessment. Please try again.');
+      setStarting(false);
+      return;
     }
     setStarting(false);
     setPhase('running');
@@ -89,7 +93,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
           setState((s) => ({ quiz: { ...s.quiz, [skill.id]: { percent: res.attempt.scorePercent, at: Date.now() } } }));
           retry();
         },
-        () => {},
+        () => setError('Could not confirm the official score. Check your skill profile before starting another attempt.'),
       );
       return;
     }
@@ -111,16 +115,23 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
         </PageHeader>
         <LiquidGlassPanel className="max-w-2xl">
           <ul className="mb-6 grid gap-2.5 text-[1.0625rem]">
-            <li>{t('{n} questions, {m} minutes', { n: number(questions.length), m: number(QUIZ_MINUTES) })}</li>
+            <li>{authenticated ? t('Timed, server-graded assessment') : t('{n} questions, {m} minutes', { n: number(questions.length), m: number(QUIZ_MINUTES) })}</li>
             <li>{t('You can move between questions and change answers until you hand in.')}</li>
             <li>{t('This is practice: it is not supervised and does not issue a certificate by itself.')}</li>
           </ul>
+          {error && <p role="alert">{t(error)}</p>}
           <LiquidGlassButton variant="primary" size="lg" loading={starting} onClick={() => void startAttempt()}>
             {t('Start the clock')}
           </LiquidGlassButton>
         </LiquidGlassPanel>
       </>
     );
+  }
+
+  if (phase === 'done' && serverAttempt && !serverResult) {
+    return <LiquidGlassPanel><p role="status">{t(error || 'Waiting for the official score…')}</p>
+      {error && <LiquidGlassButton to="/skills">{t('See my profile')}</LiquidGlassButton>}
+    </LiquidGlassPanel>;
   }
 
   if (phase === 'done') {

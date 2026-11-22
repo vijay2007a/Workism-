@@ -31,3 +31,6 @@ logs/
 *.sqlite3
 *.bak
 *.backup
+
+# Supabase CLI local cache
+supabase/.temp/

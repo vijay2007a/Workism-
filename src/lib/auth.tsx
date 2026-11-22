@@ -1,5 +1,6 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, connected, getAccessToken, setAccessToken } from '../services';
+import { switchAccount } from './store';
 import { supabase } from './supabase';
 
 export interface SessionState {
@@ -39,12 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (!live) return;
       const s = data.session;
+      switchAccount(s?.user?.id ?? null);
       syncToken(s?.access_token ?? null);
       setUserId(s?.user?.id ?? null);
       setEmail(s?.user?.email ?? '');
       setReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      switchAccount(session?.user?.id ?? null);
       syncToken(session?.access_token ?? null);
       setUserId(session?.user?.id ?? null);
       setEmail(session?.user?.email ?? '');
@@ -58,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api.logout();
+    switchAccount(null);
     syncToken(null);
     setUserId(null);
     setEmail('');

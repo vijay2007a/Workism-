@@ -5,7 +5,7 @@ import { AppLayout } from './components/AppLayout';
 import { AssistantProvider } from './components/AIAssistantPanel';
 import { GlassToastProvider } from './glass/GlassToast';
 import { useCalm, useLite } from './lib/effects';
-import { AuthProvider } from './lib/auth';
+import { AuthProvider, useAuth } from './lib/auth';
 import { I18nProvider } from './lib/i18n';
 import { useStore } from './lib/store';
 import { WorkspaceProvider } from './lib/workspace';
@@ -94,18 +94,21 @@ function Screens() {
   );
 }
 
+function AccountWorkspace() {
+  const { userId, authenticated } = useAuth();
+  return (
+    <WorkspaceProvider key={userId ?? (authenticated ? 'signed-in' : 'guest')}>
+      <GlassToastProvider>
+        <AssistantProvider><Screens /></AssistantProvider>
+      </GlassToastProvider>
+    </WorkspaceProvider>
+  );
+}
+
 export default function App() {
   return (
     <I18nProvider>
-      <AuthProvider>
-        <WorkspaceProvider>
-          <GlassToastProvider>
-            <AssistantProvider>
-              <Screens />
-            </AssistantProvider>
-          </GlassToastProvider>
-        </WorkspaceProvider>
-      </AuthProvider>
+      <AuthProvider><AccountWorkspace /></AuthProvider>
     </I18nProvider>
   );
 }

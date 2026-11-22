@@ -18,7 +18,7 @@ Configure these in **Vercel Project Settings -> Environment Variables** (separat
 | `SUPABASE_SECRET_KEY` | **Server-only Secret** | Vercel API | Privileged operations (grading, cert signing, audit, rate limits) |
 | `DATABASE_URL` | **Server-only Secret** | CI / Migrations | Direct Postgres URL for running SQL migrations |
 | `GEMINI_API_KEY` | **Server-only Secret** | Vercel API | Google Gemini API key (`@google/genai`) |
-| `GEMINI_MODEL` | Server-only (optional) | Vercel API | Defaults to `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Server-only (optional) | Vercel API | Defaults to `gemini-3.5-flash-lite` |
 | `CERTIFICATE_SIGNING_SECRET` | **Server-only Secret** | Vercel API | Min 32-char cryptographically random secret (`openssl rand -hex 32`) |
 | `ALLOWED_ORIGINS` | Server-only | Vercel API | Comma-separated exact production origins (e.g., `https://workism.vercel.app`) |
 | `AI_DAILY_QUOTA` | Server-only (optional) | Vercel API | Per-user daily AI request cap (default `40`) |
@@ -32,6 +32,9 @@ Configure these in **Vercel Project Settings -> Environment Variables** (separat
    - `supabase/migrations/0002_rls_and_storage.sql`
    - `supabase/migrations/0003_seed_catalog.sql`
    - `supabase/migrations/0004_security_hardening.sql`
+   - `supabase/migrations/20261122103523_production_integrity.sql`
+
+   The confirmed WORKISM database already has all five migrations. Check migration history before applying changes.
 2. **Authentication Settings** (Supabase Dashboard -> Authentication):
    - Enable Email provider with **Confirm email** enabled.
    - Configure **Google OAuth** client ID & secret in Supabase Auth Providers (never in frontend code).

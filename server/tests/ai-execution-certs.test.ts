@@ -62,7 +62,7 @@ test('roadmap sanitizer drops completed lessons and unknown course/lesson IDs', 
 });
 
 test('Gemini client refuses requests cleanly when GEMINI_API_KEY is not configured', async () => {
-  const client = createGeminiClient(readEnv({}), async () => {}, async () => 0);
+  const client = createGeminiClient(readEnv({}), async () => {}, async () => true);
   await assert.rejects(
     () => client.complete({ userId: 'u1', endpoint: 'ai_tutor', languageCode: 'en', systemPrompt: 's', userPrompt: 'u' }),
     /not configured/i,
@@ -114,6 +114,7 @@ test('HMAC-SHA256 certificate signatures reject short secrets, tampering, and in
     revocationReason: null,
   };
   assert.equal(verifyCertificateSignature(cert, secret), true);
+  assert.equal(verifyCertificateSignature({ ...cert, holderName: 'Different learner' }, secret), false);
   assert.equal(verifyCertificateSignature({ ...cert, signatureHex: sig.replace(/^./, sig[0] === 'a' ? 'b' : 'a') }, secret), false);
   assert.equal(verifyCertificateSignature(cert, 'wrong-secret-key-that-is-still-over-32-chars-long'), false);
 

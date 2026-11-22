@@ -14,7 +14,7 @@ const SubmitAttemptSchema = z.object({
 
 const CompleteLessonSchema = z.object({
   courseId: z.string().trim().min(1).max(80),
-  checkPassed: z.boolean().default(true),
+  answerIndex: z.number().int().nonnegative(),
 });
 
 const RoadmapRequestSchema = z.object({
@@ -41,7 +41,7 @@ const RecordCodeSubmissionSchema = z.object({
   challengeId: z.string().trim().min(1).max(80),
   languageId: z.string().trim().min(1).max(32),
   code: z.string().min(1).max(32_768),
-  executionMode: z.enum(['browser_js', 'remote_sandbox', 'unavailable']),
+  executionMode: z.enum(['browser_js', 'unavailable']),
   passedCount: z.number().int().min(0).max(100),
   totalCount: z.number().int().min(0).max(100),
   results: z.array(z.object({ ok: z.boolean(), got: z.string().max(500) })).max(100).default([]),
@@ -69,7 +69,7 @@ async function handleTutor(ctx: Parameters<RouteDef['handler']>[0]) {
     multilingualInstruction(languageCode),
     'Give clear, encouraging explanations, runnable code examples, debugging guidance, or short revision exercises.',
     'Never invent official scores, grades, or certificate approvals.',
-    `Learner skill profile: ${skillContext}. Goal: ${profile?.careerGoal || 'general software skills'}.`,
+
   ].join(' ');
 
   const completion = await ctx.runtime.ai.complete({
@@ -77,7 +77,7 @@ async function handleTutor(ctx: Parameters<RouteDef['handler']>[0]) {
     endpoint: 'ai_tutor',
     languageCode,
     systemPrompt,
-    userPrompt: historyTranscript,
+    userPrompt: JSON.stringify({ skills: skillContext, goal: profile?.careerGoal || '', conversation: historyTranscript }),
     maxOutputTokens: 700,
   });
 
@@ -285,7 +285,10 @@ export const skillsLearningRoutes: RouteDef[] = [
         throw new ApiError(409, 'lesson_locked', `Complete "${missingPrior.title}" before completing this lesson.`);
       }
 
-      const lessonsDone = await ctx.runtime.db.completeLesson(user.id, course.id, ctx.params.lessonId, body.checkPassed);
+      if (ordered[idx].check.answer !== body.answerIndex) {
+        throw new ApiError(422, 'practice_incorrect', 'Review the lesson and try the practice question again.');
+      }
+      const lessonsDone = await ctx.runtime.db.completeLesson(user.id, course.id, ctx.params.lessonId, true);
       const courseFinished = ordered.every((l) => lessonsDone.includes(l.id));
       if (courseFinished) {
         await ctx.runtime.db.pushNotification(

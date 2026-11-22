@@ -44,7 +44,7 @@ All JSON error responses follow `{ "error": { "code": string, "message": string,
 | `POST` | `/api/assessments/attempts/:attemptId/submit` | User | 15 / 10m | Server-side grade against DB answer keys, enforce deadline & single-submission, update official score + optional multilingual Gemini coaching |
 | `GET` | `/api/courses` | User | — | Published courses, modules, and lessons |
 | `POST` | `/api/courses/:courseId/enroll` | User | — | Enroll in course |
-| `POST` | `/api/lessons/:lessonId/complete` | User | — | Record lesson completion (enforces sequential unlock order) |
+| `POST` | `/api/lessons/:lessonId/complete` | User | — | Submit `{ courseId, answerIndex }` with a zero-based practice answer. The server checks the answer and sequential unlock order. |
 | `GET` | `/api/learning/roadmap` | User | — | Active persisted learning roadmap |
 | `POST` | `/api/ai/roadmap` | User | 6 / 10m + AI quota | Generate & persist adaptive Gemini roadmap (never regenerates completed lessons) |
 | `GET` | `/api/ai/tutor/history` | User | — | Fetch recent AI tutor messages |
@@ -59,7 +59,7 @@ All JSON error responses follow `{ "error": { "code": string, "message": string,
 |---|---|---|---|---|
 | `GET` | `/api/projects` | User | — | Project catalog + own submissions |
 | `POST` | `/api/projects/:id/upload-url` | User | 15 / 10m | Request short-lived signed Storage upload URL (validates filename/MIME/size) |
-| `POST` | `/api/projects/:id/submissions` | User | 10 / 10m | Submit GitHub URL and/or validated file (magic bytes + Zip Slip check) + rubric-guided Gemini feedback |
+| `POST` | `/api/projects/:id/submissions` | User | 10 / 10m | Submit a GitHub URL and/or a validated private file. Use the signed upload ticket, then submit `storagePath`, `fileName`, `fileMime` and `fileSizeBytes`. Archive submissions require a scanner. |
 | `GET` | `/api/certificates` | User | — | Certificate templates, live eligibility breakdown, and issued records |
 | `POST` | `/api/certificates/:templateId/issue` | User | 10 / 10m | Verify 100% course + assessed score >= pass mark + verified project; sign with HMAC-SHA256 & persist |
 | `GET` | `/api/certificates/:code/pdf` | Public | 30 / 10m | Download generated `%PDF-1.4` certificate (rejects revoked or tampered) |
@@ -73,6 +73,7 @@ All JSON error responses follow `{ "error": { "code": string, "message": string,
 |---|---|---|---|
 | `GET` | `/api/instructor/overview` | `instructor`, `admin` | Course/project/submission counts |
 | `GET` | `/api/instructor/submissions` | `instructor`, `admin` | Submissions within assigned project scope |
+| `GET` | `/api/instructor/submissions/:id/file` | `instructor`, `admin` | Get a five-minute download URL for an assigned submission |
 | `POST` | `/api/instructor/submissions/:id/review` | `instructor`, `admin` | Score rubric, verify/approve or request changes, notify student, log audit |
 | `POST` | `/api/instructor/courses` | `instructor`, `admin` | Create new course |
 | `POST` | `/api/instructor/rubrics` | `instructor`, `admin` | Create/update project rubric criterion |

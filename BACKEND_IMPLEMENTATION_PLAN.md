@@ -1,6 +1,19 @@
 # WORKISM 3.0 — Backend Implementation Plan
 
-## Execution Status Ledger
+## Integration checklist, 22 November 2026
+
+| Phase | Existing state and dependency | Work and acceptance test | Risk and current status |
+|---|---|---|---|
+| Repository | GitHub main and checkout both at `f600c7b` | Run tests, build, lint, dependency and bundle scans | Baseline 68/68 passed. npm reported zero advisories. |
+| Database | Owner confirmed a healthy, empty Supabase project. No migration history, public tables, auth users or buckets. | Apply reviewed migrations, check catalog, grants, keys, triggers, storage and role isolation against hosted PostgreSQL. | Five migrations applied. Hosted rollback assertions passed. |
+| Accounts | Browser uses Supabase Auth. OAuth requires Google client configuration and redirects. | Verify email confirmation, sign-in, recovery, logout and distinct student/staff role boundaries with test accounts. | Hosted settings confirm email verification and Google provider disabled. Mailbox and OAuth journeys pending. |
+| Skill profiling and learning | API grades assessments, persists progress and generates a roadmap. | Check authoritative answers, atomic grading, persisted lessons and roadmap, and displayed scores. | Transactional grading and roadmap persistence passed hosted assertions. Authenticated browser journey pending. |
+| AI | Gemini SDK present. Owner is rotating the previously exposed credential. | Reserve quota before provider calls, validate results, test one tutor response and one multilingual response with the replacement. | Paid requests gated on confirmed rotation. |
+| Projects and certificates | Private storage, review and signing paths exist. | Check upload bytes, assigned reviewer access, signed fields, revocation and public response. | Private bucket verified. Atomic review passed hosted assertions. Signed Storage HTTP transfer and hosted issuance pending. |
+| Deployment | Team access granted. Linked the specified repository to workism-3. Preview public settings configured. | Obtain team access, identify project, configure scoped settings, deploy preview and test the student and staff journeys. | Production promotion requires a passing preview and confirmed credential rotation. Pending. |
+| Release audit | Previous report describes local checks | Record hosted and local evidence separately, review staged changes, scan, commit and push a review branch. | Prevent automatic production deployment from main before release gates pass. Pending. |
+
+## Historical execution ledger (original implementation)
 
 | Phase | Scope | Code & Automated Verification | Live External Verification |
 |---|---|---|---|

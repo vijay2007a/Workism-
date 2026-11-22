@@ -211,7 +211,8 @@ export const api = {
     if (!connected) throw new NotConnected('/auth/recover');
     const redirectTo = `${location.origin}/reset-password`;
     if (supabase) {
-      await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw new ApiRequestError(400, 'recovery_failed', 'Could not request a password reset.');
       return;
     }
     await call('/api/auth/recover', { body: { email, redirectTo }, auth: false });
@@ -228,8 +229,11 @@ export const api = {
   },
 
   logout: async () => {
-    if (supabase) await supabase.auth.signOut();
-    else if (connected && currentAccessToken) await call('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    if (supabase) {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw new ApiRequestError(503, 'logout_failed', 'Could not end the session.');
+    }
+    else if (connected && currentAccessToken) await call('/api/auth/logout', { method: 'POST' });
     setAccessToken(null);
   },
 
@@ -244,9 +248,11 @@ export const api = {
       body: { answers, languageCode },
     }),
 
-  completeLesson: (courseId: string, lessonId: string, checkPassed = true) =>
+  enrollCourse: (id: string) => call(`/api/courses/${encodeURIComponent(id)}/enroll`, { method: 'POST' }),
+
+  completeLesson: (courseId: string, lessonId: string, answerIndex: number) =>
     call<{ lessonsDone: string[]; courseFinished: boolean }>(`/api/lessons/${encodeURIComponent(lessonId)}/complete`, {
-      body: { courseId, checkPassed },
+      body: { courseId, answerIndex },
     }),
 
   generateRoadmap: (goal?: string, languageCode?: string) =>
@@ -263,7 +269,21 @@ export const api = {
   recordCodeSubmission: (payload: { challengeId: string; languageId: string; code: string; executionMode: 'browser_js' | 'remote_sandbox' | 'unavailable'; passedCount: number; totalCount: number; results: { ok: boolean; got: string }[] }) =>
     call<{ id: string }>('/api/code/submissions', { body: payload }),
 
-  submitProject: (id: string, repo: string, note: string, extra?: { fileName?: string; fileMime?: string; fileBase64?: string; languageCode?: string }) =>
+  uploadProjectFile: async (id: string, file: File) => {
+    if (!supabase) throw new NotConnected('Supabase Storage');
+    const mime = file.type || (/\.md$/i.test(file.name) ? 'text/markdown' : /\.txt$/i.test(file.name) ? 'text/plain' : 'application/octet-stream');
+    const ticket = await call<{ signedUrl: string; path: string; safeName: string }>(
+      `/api/projects/${encodeURIComponent(id)}/upload-url`,
+      { body: { fileName: file.name, mimeType: mime, sizeBytes: file.size } },
+    );
+    const token = new URL(ticket.signedUrl).searchParams.get('token');
+    if (!token) throw new Error('Upload authorization is missing.');
+    const { error } = await supabase.storage.from('project-submissions').uploadToSignedUrl(ticket.path, token, file, { contentType: mime });
+    if (error) throw new Error('Could not upload the project file.');
+    return { storagePath: ticket.path, fileName: ticket.safeName, fileMime: mime, fileSizeBytes: file.size };
+  },
+
+  submitProject: (id: string, repo: string, note: string, extra?: { fileName?: string; fileMime?: string; fileBase64?: string; storagePath?: string; fileSizeBytes?: number; languageCode?: string }) =>
     call<{ submission: Record<string, unknown> }>(`/api/projects/${encodeURIComponent(id)}/submissions`, {
       body: { ...(repo ? { repo } : {}), note, ...extra },
     }),
@@ -283,8 +303,9 @@ export const api = {
     call<{ portfolio: PublicPortfolioData }>(`/api/portfolio/${encodeURIComponent(slug)}`, { auth: false }),
 
   // Instructor & Admin APIs
-  instructorOverview: () => call<{ counts: Record<string, number>; projects: { id: string; title: string }[] }>('/api/instructor/overview'),
+  instructorOverview: () => call<{ counts: Record<string, number>; projects: { id: string; title: string; rubric: { criterion: string; maxPoints: number }[] }[] }>('/api/instructor/overview'),
   instructorSubmissions: () => call<{ submissions: { id: string; projectId: string; userId: string; version: number; repoUrl: string | null; fileName: string | null; note: string; status: string; overallScore: number | null; createdAt: string }[] }>('/api/instructor/submissions'),
+  submissionFile: (id: string) => call<{ signedUrl: string }>(`/api/instructor/submissions/${encodeURIComponent(id)}/file`),
   reviewSubmission: (id: string, body: { rubricScores: { criterion: string; score: number; maxPoints: number; comment: string }[]; feedback: string; approved: boolean }) =>
     call(`/api/instructor/submissions/${encodeURIComponent(id)}/review`, { body }),
   adminOverview: () => call<{ usersCount: number; roles: Record<string, number>; coursesCount: number; languagesCount: number; aiUsage: { totalRequests: number; byEndpoint: Record<string, number>; byStatus: Record<string, number> } }>('/api/admin/overview'),

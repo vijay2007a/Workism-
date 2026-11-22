@@ -4,9 +4,24 @@
 **Reference Baseline:** Supabase Production Security Checklist (`https://supabase.com/docs/guides/security/production-checklist`), OWASP API Security Top 10, Ponytail Audit Methodology  
 **Scope:** PostgreSQL migrations & RLS policies, Vercel Web-Standard API (`api/`, `server/`), Supabase Storage rules, Gemini AI boundary, Vite client bundle (`dist/`), `.gitignore` & Git commit history.
 
-> **Important Honesty Notice:** No platform is completely immune to attacks. Automated tests verify security logic, negative authorization, secret isolation, and SQL policy structure offline using isolated test doubles. Live Supabase PostgreSQL, live Google OAuth, live Gemini API, and live Vercel deployment checks remain pending until project credentials are configured in Vercel/Supabase.
+## Integration verification on 22 November 2026
 
----
+| Finding | Severity | Resolution and evidence |
+|---|---|---|
+| The hosted project's default grants blocked backend writes and included unnecessary learner privileges. | High | The production integrity migration grants only required Data API access. Hosted assertions verified student isolation, scoped staff access, protected grades, answer keys and certificate issuance. |
+| The original assessment bank reused public practice answers. Grade writes and review writes could partially succeed. | High | New attempts use 15 distinct official questions with private answer keys. Hosted tests checked atomic grade history, review persistence and roadmap milestones. |
+| The public verification RPC included a signed payload containing an internal user ID. | High | Public callers now reach verification through the application. The raw RPC cannot be executed by anonymous users. Local tests checked signed fields, revocation and public responses. |
+| Concurrent Gemini requests could pass a count-based quota, and a failed count defaulted to zero. | High | The server reserves quota before provider use with the shared database limiter. The hosted test verified admission and rejection at the limit. Provider calls await confirmed key rotation. |
+| A direct project submission could reference an unchecked upload. | High | The API reads the private object and validates its path, size, type and bytes before accepting it. Scoped staff can request a short-lived download. Archive submissions are disabled pending a scanner. Signed HTTP transfer awaits an authenticated preview session. |
+| Browser account changes could retain the previous learner's data, or display practice results while an official grade was pending. | High | Hosted learner state is kept in memory and reset on account changes. Official scores are displayed after successful submission. Build and type checks passed. |
+
+Supabase project `vkajgacpwdfaudvpgxrr` has 38 application tables with RLS enabled, 62 foreign keys and a private 10 MiB submission bucket. Migrations `0001`–`0004` and `20261122103523_production_integrity` were applied and recorded. The hosted test in `supabase/tests/integration.sql` rolled back all fixtures. The database returned zero auth users and zero assessment attempts afterwards.
+
+Supabase Auth reports email sign-up enabled, email confirmation required, and Google sign-in disabled. An inbox-backed confirmation/recovery journey, authenticated preview requests, Gemini billing and signing-key operation remain release checks. Backup restoration and malware scanning have not been verified. The database advisor flags callable policy helpers and the platform's RLS event function. The rate-limit table intentionally has no learner policy.
+
+Local verification passed all 68 tests, type checking, lint, a production build, secret scans of the working tree, Git history and compiled assets, and npm audit with zero reported advisories. Secret scanning detects known patterns. The previously exposed Gemini credential is a separate rotation requirement.
+
+## Historical findings from the initial implementation
 
 ## Findings Identified & Remediated During Audit
 

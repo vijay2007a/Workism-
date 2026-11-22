@@ -17,6 +17,7 @@
     "test:frontend": "node --test \"src/**/*.test.ts\"",
     "test:backend": "node --test \"server/**/*.test.ts\"",
     "scan:secrets": "node scripts/secret-scan.ts --all",
+    "scan:history": "node scripts/secret-scan.ts --history",
     "scan:staged": "node scripts/secret-scan.ts --staged",
     "scan:dist": "node scripts/secret-scan.ts --dist"
   },

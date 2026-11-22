@@ -34,7 +34,7 @@ export default function Onboarding() {
     setForward(to > step);
     setStep(to);
   };
-  const next = (e: FormEvent) => {
+  const next = async (e: FormEvent) => {
     e.preventDefault();
     if (step === 0) {
       const problem = checkName(profile.name);
@@ -44,14 +44,19 @@ export default function Onboarding() {
     if (!last) return move(step + 1);
     setProfile({ name: profile.name.trim() });
     if (authenticated) {
-      void api.updateProfile({
-        displayName: profile.name.trim(),
-        careerGoal: profile.goal,
-        interests: profile.interests,
-        learningStyle: profile.style,
-        learningPace: profile.pace,
-        preferredLanguage: lang,
-      }).catch(() => {});
+      try {
+        await api.updateProfile({
+          displayName: profile.name.trim(),
+          careerGoal: profile.goal,
+          interests: profile.interests,
+          learningStyle: profile.style,
+          learningPace: profile.pace,
+          preferredLanguage: lang,
+        });
+      } catch {
+        setNameError('Could not save your preferences. Please try again.');
+        return;
+      }
     }
     notify({ id: 'onboarded', text: 'Your preferences are saved. Take an assessment to replace the sample scores.', to: '/assessments' });
     go('/dashboard');
@@ -59,6 +64,7 @@ export default function Onboarding() {
 
   return (
     <div className="auth">
+      {last && nameError && <p role="alert">{t(nameError)}</p>}
       <title>{`${t(STEPS[step])} · WORKISM`}</title>
       <Aurora live />
       <header className="flex items-center justify-between gap-4">

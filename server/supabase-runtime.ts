@@ -130,7 +130,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       .eq('user_id', userId)
       .eq('status', 'ok')
       .gte('created_at', startOfDay.toISOString());
-    if (error) return 0;
+    if (error) throw new ApiError(503, 'usage_unavailable', 'AI usage is unavailable.');
     return count ?? 0;
   };
 
@@ -148,7 +148,14 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
         status: entry.status,
       });
     },
-    getDailyUsageCount,
+    async (userId) => {
+      const day = new Date().toISOString().slice(0, 10);
+      const { data, error } = await admin().rpc('check_rate_limit', {
+        p_key: 'ai:daily:' + day + ':' + userId, p_limit: env.aiDailyQuota, p_window_seconds: 86400,
+      }).single<{ allowed: boolean }>();
+      if (error || !data) throw new ApiError(503, 'quota_unavailable', 'AI quota service is unavailable.');
+      return data.allowed;
+    },
   );
 
   const sandbox = createSandboxRunner(env);
@@ -217,7 +224,8 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async logout(token: string) {
-        await asUser(token).auth.signOut();
+        const { error } = await admin().auth.admin.signOut(token, 'local');
+        if (error) throw new ApiError(503, 'logout_failed', 'Could not end the session.');
       },
 
       async recoverPassword(email: string, redirectTo: string) {
@@ -292,7 +300,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
           .from('project-submissions')
           .createSignedUploadUrl(objectPath);
         if (error || !data) throw new ApiError(500, 'storage_error', 'Could not prepare file upload URL.');
-        return { signedUrl: data.signedUrl, path: data.path, expiresInSeconds: 120 };
+        return { signedUrl: data.signedUrl, path: data.path, expiresInSeconds: 7200 };
       },
       async uploadBytes(objectPath, bytes, contentType) {
         const { data, error } = await admin().storage
@@ -301,10 +309,15 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
         if (error || !data) throw new ApiError(500, 'storage_error', 'Could not store uploaded file.');
         return { path: data.path };
       },
+      async readUpload(objectPath) {
+        const { data, error } = await admin().storage.from('project-submissions').download(objectPath);
+        if (error || !data) throw new ApiError(400, 'upload_missing', 'The uploaded file could not be read.');
+        return data;
+      },
       async createSignedDownloadUrl(objectPath) {
         const { data, error } = await admin().storage
           .from('project-submissions')
-          .createSignedUrl(objectPath, 300);
+          .createSignedUrl(objectPath, 300, { download: true });
         if (error || !data) throw new ApiError(404, 'file_not_found', 'Uploaded file not found.');
         return { signedUrl: data.signedUrl, expiresInSeconds: 300 };
       },
@@ -360,7 +373,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async getPublicPortfolio(slug) {
-        const { data, error } = await anon().rpc('get_public_portfolio', { p_slug: slug });
+        const { data, error } = await admin().rpc('get_public_portfolio', { p_slug: slug });
         if (error || !data) return null;
         return data as Record<string, unknown>;
       },
@@ -455,15 +468,20 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
           .eq('active', true)
           .maybeSingle();
         if (!assessment) return null;
-        const { data: questions } = await admin()
+        const { data: questions, error: questionError } = await admin()
           .from('assessment_questions')
           .select('id, prompt, options, explanation, difficulty, sort_order, assessment_question_keys(correct_index)')
           .eq('assessment_id', assessment.id)
+          .eq('practice_derived', false)
           .order('sort_order');
 
+        if (questionError || !questions?.length) throw new ApiError(503, 'assessment_unavailable', 'Assessment questions are unavailable.');
         const mapped: AssessmentQuestionInternal[] = ((questions ?? []) as Record<string, unknown>[]).map((q) => {
           const keyRel = q.assessment_question_keys as { correct_index?: number } | { correct_index?: number }[] | null;
-          const correctIndex = Array.isArray(keyRel) ? (keyRel[0]?.correct_index ?? 0) : (keyRel?.correct_index ?? 0);
+          const correctIndex = Array.isArray(keyRel) ? keyRel[0]?.correct_index : keyRel?.correct_index;
+          if (typeof correctIndex !== 'number' || !Array.isArray(q.options) || correctIndex < 0 || correctIndex >= q.options.length) {
+            throw new ApiError(503, 'assessment_unavailable', 'Assessment grading is unavailable.');
+          }
           return {
             id: String(q.id),
             prompt: String(q.prompt),
@@ -562,22 +580,6 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
         if (error) throw new ApiError(500, 'attempt_submit_failed', 'Could not finalize attempt.');
         if (!data) throw new ApiError(409, 'already_submitted', 'This attempt has already been submitted.');
 
-        const { data: skillRow } = await admin().from('skills').select('default_target').eq('id', input.skillId).maybeSingle();
-        await admin().from('user_skill_scores').upsert({
-          user_id: input.userId,
-          skill_id: input.skillId,
-          score: input.scorePercent,
-          target: Number(skillRow?.default_target ?? 75),
-          source: 'assessed',
-          updated_at: now,
-        });
-        await admin().from('skill_history').insert({
-          user_id: input.userId,
-          skill_id: input.skillId,
-          score: input.scorePercent,
-          attempt_id: input.attemptId,
-        });
-
         return {
           id: String(data.id),
           userId: String(data.user_id),
@@ -650,7 +652,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async enrollCourse(userId, courseId) {
-        await admin().from('enrollments').upsert({ user_id: userId, course_id: courseId });
+        await admin().from('enrollments').upsert({ user_id: userId, course_id: courseId }).throwOnError();
       },
 
       async listLessonsDone(userId, caller) {
@@ -659,13 +661,13 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async completeLesson(userId, courseId, lessonId, checkPassed) {
-        await admin().from('enrollments').upsert({ user_id: userId, course_id: courseId });
+        await admin().from('enrollments').upsert({ user_id: userId, course_id: courseId }).throwOnError();
         await admin().from('lesson_progress').upsert({
           user_id: userId,
           course_id: courseId,
           lesson_id: lessonId,
           check_passed: checkPassed,
-        });
+        }).throwOnError();
         const { data } = await admin().from('lesson_progress').select('lesson_id').eq('user_id', userId);
         return ((data ?? []) as { lesson_id: string }[]).map((r) => r.lesson_id);
       },
@@ -703,26 +705,10 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async saveRoadmap(userId, goal, languageCode, summary, milestones) {
-        await admin().from('learning_roadmaps').update({ status: 'archived' }).eq('user_id', userId).eq('status', 'active');
-        const { data: map, error } = await admin()
-          .from('learning_roadmaps')
-          .insert({ user_id: userId, goal, preferred_language: languageCode, summary, status: 'active' })
-          .select('*')
-          .single();
-        if (error || !map) throw new ApiError(500, 'roadmap_save_failed', 'Could not persist roadmap.');
-        if (milestones.length) {
-          await admin().from('roadmap_milestones').insert(
-            milestones.map((m, idx) => ({
-              roadmap_id: map.id,
-              course_id: m.courseId,
-              skill_id: m.skillId,
-              title: m.title,
-              objective: m.objective,
-              lesson_ids: m.lessonIds,
-              sort_order: idx + 1,
-            })),
-          );
-        }
+        const { data: map, error } = await admin().rpc('save_learning_roadmap', {
+          p_user: userId, p_goal: goal, p_language: languageCode, p_summary: summary, p_items: milestones,
+        }).single<{ id: string; created_at: string }>();
+        if (error || !map) throw new ApiError(503, 'roadmap_save_failed', 'Could not persist roadmap.');
         return {
           id: String(map.id),
           userId,
@@ -847,18 +833,11 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async createProjectSubmission(input) {
-        const { count } = await admin()
-          .from('project_submissions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', input.userId)
-          .eq('project_id', input.projectId);
-        const version = (count ?? 0) + 1;
         const { data, error } = await admin()
           .from('project_submissions')
           .insert({
             project_id: input.projectId,
             user_id: input.userId,
-            version,
             repo_url: input.repoUrl,
             storage_path: input.storagePath,
             file_name: input.fileName,
@@ -875,32 +854,12 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
       },
 
       async reviewProjectSubmission(input) {
-        const nextStatus = input.approved ? 'verified' : 'changes_requested';
-        const { data: sub, error: subErr } = await admin()
-          .from('project_submissions')
-          .update({
-            status: nextStatus,
-            overall_score: input.totalScore,
-            ai_feedback: input.feedback,
-          })
-          .eq('id', input.submissionId)
-          .select('*')
-          .single();
-        if (subErr || !sub) throw new ApiError(404, 'submission_not_found', 'Submission not found.');
-        const { data: ev, error: evErr } = await admin()
-          .from('project_evaluations')
-          .insert({
-            submission_id: input.submissionId,
-            evaluator_id: input.evaluatorId,
-            evaluator_type: 'instructor',
-            rubric_scores: input.rubricScores,
-            total_score: input.totalScore,
-            feedback: input.feedback,
-            approved: input.approved,
-          })
-          .select('*')
-          .single();
-        if (evErr || !ev) throw new ApiError(500, 'evaluation_failed', 'Could not save evaluation.');
+        const { data, error } = await admin().rpc('review_submission', {
+          p_submission: input.submissionId, p_evaluator: input.evaluatorId, p_scores: input.rubricScores,
+          p_total: input.totalScore, p_feedback: input.feedback, p_approved: input.approved,
+        });
+        if (error || !data?.evaluation || !data?.submission) throw new ApiError(500, 'evaluation_failed', 'Could not save the review.');
+        const { submission: sub, evaluation: ev } = data;
         return {
           submission: mapSubmission(sub as Record<string, unknown>),
           evaluation: {

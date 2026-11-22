@@ -7,6 +7,7 @@ export interface SignaturePayload {
   userId: string;
   holderName: string;
   title: string;
+  skillName?: string;
   issuedAt: string;
 }
 
@@ -25,6 +26,7 @@ export function canonicalPayloadString(payload: SignaturePayload): string {
   return JSON.stringify({
     holderName: payload.holderName,
     issuedAt: payload.issuedAt,
+    ...(payload.skillName === undefined ? {} : { skillName: payload.skillName }),
     templateId: payload.templateId,
     title: payload.title,
     userId: payload.userId,
@@ -45,6 +47,10 @@ export function verifyCertificateSignature(cert: IssuedCertificateRecord, secret
   if (!raw.verificationCode || !raw.templateId || !raw.userId || !raw.holderName || !raw.title || !raw.issuedAt) {
     return false;
   }
+  if (raw.verificationCode !== cert.verificationCode || raw.templateId !== cert.templateId ||
+      (raw.skillName !== undefined && raw.skillName !== cert.skillName) ||
+      raw.userId !== cert.userId || raw.holderName !== cert.holderName || raw.title !== cert.title ||
+      Date.parse(raw.issuedAt) !== Date.parse(cert.issuedAt) || !/^[a-f0-9]{64}$/.test(cert.signatureHex)) return false;
   const expected = signCertificatePayload(raw as SignaturePayload, secret);
   const a = Buffer.from(expected, 'hex');
   const b = Buffer.from(cert.signatureHex, 'hex');

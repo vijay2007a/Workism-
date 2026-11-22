@@ -21,6 +21,10 @@ SQL migrations live in [`supabase/migrations/`](file:///c:/Users/tamiz/OneDrive/
 | **Platform Ops** | `notifications`, `ai_usage_logs`, `rate_limit_buckets`, `security_audit_logs` | Notifications owned by user; AI usage readable by owner or admin; `security_audit_logs` admin-only; `rate_limit_buckets` `service_role`/RPC only |
 | **Storage** | `storage.buckets` (`project-submissions`) | Private (`public = false`), 10 MB limit, allowed MIME allowlist, path-prefixed by `auth.uid()` |
 
+## Hosted integration migration
+
+`20261122103523_production_integrity.sql` specifies client and backend grants, limits progress and submission writes to server paths, and commits grade history, review and roadmap writes transactionally. Public certificate verification goes through the API. The database keeps official questions separate from browser practice questions.
+
 ## Applying Migrations
 
 Using Supabase CLI (linked to your existing project):

@@ -49,11 +49,11 @@ export default function Learn() {
   const buildRoadmap = async () => {
     setGenerating(true);
     try {
-      await api.generateRoadmap(goal || undefined, lang);
-      toast('Personalized AI roadmap updated.');
+      const result = await api.generateRoadmap(goal || undefined, lang);
+      toast(result.generatedBy === 'gemini' ? 'Gemini roadmap updated.' : 'Roadmap updated from your recorded skill gaps.');
       retry();
     } catch {
-      toast('Sign in to generate a personalized Gemini roadmap.', 'info');
+      toast('Could not update the roadmap. Please try again.', 'bad');
     }
     setGenerating(false);
   };
@@ -69,8 +69,13 @@ export default function Learn() {
         )}
       </PageHeader>
       {roadmap && (
-        <LiquidGlassPanel className="mb-5" tint="rgb(176 240 246 / .45)" title="AI Personalized Plan">
+        <LiquidGlassPanel className="mb-5" tint="rgb(176 240 246 / .45)" title="Personalized plan">
           <p className="text-ink-soft">{roadmap.summary}</p>
+          <ol className="mt-3 grid gap-2">{roadmap.milestones.map((m, index) => (
+            <li key={index}><strong>{m.title}</strong> · {m.objective}
+              {m.courseId && m.lessonIds[0] && <Link className="ml-2 underline" to={`/learn/${m.courseId}/${m.lessonIds[0]}`}>{t('Continue')}</Link>}
+            </li>
+          ))}</ol>
         </LiquidGlassPanel>
       )}
       <LiquidGlassTabs

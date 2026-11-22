@@ -29,28 +29,21 @@ export default function ProjectPage() {
   const toast = useToast();
   const [repo, setRepo] = useState(saved?.repo ?? '');
   const [note, setNote] = useState(saved?.note ?? '');
-  const [uploadFile, setUploadFile] = useState<{ name: string; mime: string; base64: string } | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   if (!project) return <NotFound inside />;
   const stage = projectStage(project, saved);
 
-  const onFilePick = async (file: File | undefined) => {
-    if (!file) return setUploadFile(null);
-    // shortcut: inline base64 upload caps at 3 MB for Vercel 4.5 MB body limit; switch to direct signed-URL PUT via /upload-url for 3-10 MB files
-    if (file.size > 3 * 1024 * 1024) {
-      setError('Inline uploads are capped at 3 MB (use a GitHub link for larger archives).');
+  const onFilePick = (file: File | undefined) => {
+    setUploadFile(null);
+    if (file && file.size > 10 * 1024 * 1024) {
+      setError('Files must be 10 MB or smaller.');
       return;
     }
-    const buf = await file.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 8192) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    }
-    setUploadFile({ name: file.name, mime: file.type || 'application/octet-stream', base64: btoa(binary) });
     setError('');
+    setUploadFile(file ?? null);
   };
 
   const submit = async (e: FormEvent) => {
@@ -61,18 +54,17 @@ export default function ProjectPage() {
     if (problem) return;
     setBusy(true);
     try {
+      const attachment = uploadFile ? await api.uploadProjectFile(project.id, uploadFile) : {};
       await api.submitProject(
         project.id,
         link,
         note.trim(),
-        uploadFile
-          ? { fileName: uploadFile.name, fileMime: uploadFile.mime, fileBase64: uploadFile.base64, languageCode: lang }
-          : { languageCode: lang },
+        { ...attachment, languageCode: lang },
       );
       toast(t('Submitted for evaluation'));
       retry();
     } catch (err) {
-      if (err instanceof NotConnected) {
+      if (err instanceof NotConnected && !uploadFile) {
         saveSubmission(project.id, link, note.trim());
         notify({ id: `project-${project.id}`, text: 'Your project is saved on this device. It has not been sent for evaluation.', to: `/labs/${project.id}` });
         toast(t('Saved on this device'), 'info');
@@ -116,13 +108,13 @@ export default function ProjectPage() {
               </LiquidGlassButton>
               <div>
                 <label htmlFor="project-file" className="mb-1.5 block ps-4 text-[0.9375rem] font-medium">
-                  Project archive or report (optional: PDF, ZIP, PNG, JPEG, MD, TXT — max 10 MB)
+                  Optional report or image (PDF, PNG, JPEG, Markdown or text, up to 10 MB)
                 </label>
                 <div className="lg-field px-4 py-2.5">
                   <input
                     id="project-file"
                     type="file"
-                    accept=".pdf,.zip,.png,.jpg,.jpeg,.md,.txt"
+                    accept=".pdf,.png,.jpg,.jpeg,.md,.txt"
                     onChange={(e) => void onFilePick(e.target.files?.[0])}
                   />
                 </div>

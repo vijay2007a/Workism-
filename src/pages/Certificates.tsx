@@ -22,7 +22,7 @@ export function useCertificateSteps(certificate: Certificate) {
     assessment: { label: t('Score {p} in the {skill} quiz', { p: percent(PASS_MARK), skill: skill?.name ?? '' }), to: `/assessments/quiz/${certificate.skill}` },
     project: { label: t('Verify {title}', { title: project?.title ?? '' }), to: `/labs/${certificate.project}` },
   };
-  return certificateSteps(course ?? { modules: [] }, lessonsDone, quiz[certificate.skill], project ?? {}).map((s) => ({ ...s, ...text[s.id] }));
+  return certificateSteps(course ?? { modules: [] }, lessonsDone, certificate.source === 'api' ? { percent: skill?.score ?? 0, at: 0 } : quiz[certificate.skill], project ?? {}).map((s) => ({ ...s, ...text[s.id] }));
 }
 
 export function CertificateChecklist({ certificate }: { certificate: Certificate }) {

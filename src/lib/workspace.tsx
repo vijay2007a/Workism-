@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, connected, type RemoteProfile, type Roadmap, type UserRole, type Workspace } from '../services';
+import { api, connected, type NotificationItem, type RemoteProfile, type Roadmap, type UserRole, type Workspace } from '../services';
 import { useAuth } from './auth';
 import { withResults } from './progress';
 import { setProfile, setSettings, useStore } from './store';
@@ -11,10 +11,11 @@ interface Value extends Workspace {
   role: UserRole;
   profile: RemoteProfile | null;
   roadmap: Roadmap | null;
+  notifications: NotificationItem[];
   retry: () => void;
 }
 
-const empty: Workspace = { name: '', skills: [], courses: [], projects: [], certificates: [], lessonsDone: [] };
+const empty: Workspace = { name: '', skills: [], courses: [], projects: [], certificates: [], lessonsDone: [], notifications: [] };
 const Ctx = createContext<Value>({
   ...empty,
   status: 'loading',
@@ -22,6 +23,7 @@ const Ctx = createContext<Value>({
   role: 'student',
   profile: null,
   roadmap: null,
+  notifications: [],
   retry: () => {},
 });
 export const useWorkspace = () => use(Ctx);
@@ -53,7 +55,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             github: w.profile.githubUsername,
             codeLang: w.profile.preferredCodeLanguage,
           });
-          if (w.profile.preferredLanguage) setSettings({ lang: w.profile.preferredLanguage });
+          setSettings({
+            ...(w.profile.preferredLanguage ? { lang: w.profile.preferredLanguage } : {}),
+            notices: w.profile.inAppNotices,
+            showScores: w.profile.showScoresPublic,
+          });
         }
         setStatus('ready');
       },
@@ -78,6 +84,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       role: data.role ?? 'student',
       profile: data.profile ?? null,
       roadmap: data.roadmap ?? null,
+      notifications: data.notifications ?? [],
       skills: isLive ? data.skills : withResults(data.skills, quiz),
       lessonsDone: isLive ? data.lessonsDone : [...new Set([...data.lessonsDone, ...lessons])],
       status,

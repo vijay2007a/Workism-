@@ -32,7 +32,7 @@ export default function CodeChallenge() {
 
   const run = async () => {
     setBusy(true);
-    if (authenticated) {
+    if (authenticated && !language.runs) {
       try {
         const remote = await api.executeCode(challenge.id, language.id, code);
         setOutcome(remote.publicResults ? { results: remote.publicResults } : { error: remote.error || remote.message || 'Remote sandbox unavailable.' });
@@ -48,6 +48,17 @@ export default function CodeChallenge() {
     if (!r.results) return;
     const passed = r.results.filter((x) => x.ok).length;
     setState((s) => ({ code: { ...s.code, [challenge.id]: { passed, total: r.results!.length, at: Date.now() } } }));
+    if (authenticated) {
+      void api.recordCodeSubmission({
+        challengeId: challenge.id,
+        languageId: language.id,
+        code,
+        executionMode: 'browser_js',
+        passedCount: passed,
+        totalCount: r.results.length,
+        results: r.results,
+      }).catch(() => {});
+    }
     if (passed === r.results.length) notify({ id: `code-${challenge.id}`, text: 'All tests passed on a coding challenge.', to: `/assessments/code/${challenge.id}` });
   };
 

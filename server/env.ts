@@ -2,6 +2,7 @@ export interface ServerEnv {
   supabaseUrl: string;
   supabasePublishableKey: string;
   supabaseSecretKey: string;
+  databaseUrl: string;
   geminiApiKey: string;
   geminiModel: string;
   certificateSigningSecret: string;
@@ -24,6 +25,7 @@ export function readEnv(source: Record<string, string | undefined> = process.env
     supabaseUrl: clean(source.SUPABASE_URL) || clean(source.VITE_SUPABASE_URL),
     supabasePublishableKey: clean(source.SUPABASE_PUBLISHABLE_KEY) || clean(source.VITE_SUPABASE_PUBLISHABLE_KEY),
     supabaseSecretKey: clean(source.SUPABASE_SECRET_KEY) || clean(source.SUPABASE_SERVICE_ROLE_KEY),
+    databaseUrl: clean(source.DATABASE_URL),
     geminiApiKey: clean(source.GEMINI_API_KEY),
     geminiModel: clean(source.GEMINI_MODEL) || 'gemini-3.5-flash-lite',
     certificateSigningSecret: clean(source.CERTIFICATE_SIGNING_SECRET),
@@ -37,6 +39,8 @@ export function readEnv(source: Record<string, string | undefined> = process.env
 
 export function envCapabilities(env: ServerEnv) {
   return {
+    supabaseAuthConfigured: Boolean(env.supabaseUrl && env.supabasePublishableKey),
+    neonDatabaseConfigured: Boolean(env.databaseUrl),
     supabaseConfigured: Boolean(env.supabaseUrl && env.supabasePublishableKey && env.supabaseSecretKey),
     geminiConfigured: Boolean(env.geminiApiKey),
     certificateSigningConfigured: env.certificateSigningSecret.length >= 32,

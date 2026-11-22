@@ -87,6 +87,12 @@ function mapCertificate(row: Record<string, unknown>): IssuedCertificateRecord {
 }
 
 export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
+  const ensureAuthConfigured = () => {
+    if (!env.supabaseUrl || !env.supabasePublishableKey) {
+      throw new ApiError(503, 'supabase_not_configured', 'Supabase Auth configuration is missing.');
+    }
+  };
+
   const ensureConfigured = () => {
     if (!env.supabaseUrl || !env.supabasePublishableKey || !env.supabaseSecretKey) {
       throw new ApiError(503, 'supabase_not_configured', 'Supabase server configuration is missing.');
@@ -106,7 +112,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
 
   /** Public publishable client (respects RLS; never bypasses policies). */
   const anon = (): SupabaseClient => {
-    ensureConfigured();
+    ensureAuthConfigured();
     return createClient(env.supabaseUrl, env.supabasePublishableKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -114,7 +120,7 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
 
   /** User-scoped RLS client carrying the verified caller JWT. */
   const asUser = (token: string): SupabaseClient => {
-    ensureConfigured();
+    ensureAuthConfigured();
     return createClient(env.supabaseUrl, env.supabasePublishableKey, {
       auth: { autoRefreshToken: false, persistSession: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
@@ -938,15 +944,16 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
 
       async revokeCertificate(certId, actorId, reason) {
         const now = new Date().toISOString();
+        const keyCol = certId.startsWith('WRK-') ? 'verification_code' : 'id';
         const { data, error } = await admin()
           .from('issued_certificates')
           .update({ status: 'revoked', revoked_at: now, revoked_by: actorId, revocation_reason: reason })
-          .eq('id', certId)
+          .eq(keyCol, certId)
           .select('*')
           .single();
         if (error || !data) throw new ApiError(404, 'certificate_not_found', 'Certificate not found.');
         await admin().from('certificate_audit_log').insert({
-          certificate_id: certId,
+          certificate_id: data.id,
           action: 'revoked',
           actor_id: actorId,
           details: { reason },

@@ -31,7 +31,7 @@ export function validateUploadMetadata(fileName: string, mimeType: string, sizeB
   if (mimeType === 'application/zip') throw new ApiError(415, 'archive_scanner_unavailable', 'Archive uploads require a configured malware scanner. Submit a repository link instead.');
   const spec = ALLOWED_UPLOAD_TYPES[mimeType];
   if (!spec) {
-    throw new ApiError(400, 'unsupported_mime', 'File type is not supported. Allowed: PDF, ZIP, PNG, JPEG, TXT, MD.');
+    throw new ApiError(400, 'unsupported_mime', 'File type is not supported. Allowed: PDF, PNG, JPEG, TXT, MD.');
   }
   const lower = safeName.toLowerCase();
   if (!spec.exts.some((ext) => lower.endsWith(ext))) {

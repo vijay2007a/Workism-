@@ -17,7 +17,7 @@ import { projectStage } from '../lib/progress';
 import { notify, saveSubmission, useStore } from '../lib/store';
 import { checkRepo } from '../lib/validate';
 import { useWorkspace } from '../lib/workspace';
-import { api, NotConnected } from '../services';
+import { api, ApiRequestError, NotConnected } from '../services';
 import NotFound from './NotFound';
 
 export default function ProjectPage() {
@@ -27,13 +27,14 @@ export default function ProjectPage() {
   const project = projects.find((p) => p.id === id);
   const saved = useStore((s) => s.submissions[id]);
   const toast = useToast();
-  const [repo, setRepo] = useState(saved?.repo ?? '');
+  const [draftRepo, setDraftRepo] = useState<string | null>(null);
   const [note, setNote] = useState(saved?.note ?? '');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   if (!project) return <NotFound inside />;
+  const repo = draftRepo ?? project.repoUrl ?? saved?.repo ?? '';
   const stage = projectStage(project, saved);
 
   const onFilePick = (file: File | undefined) => {
@@ -61,6 +62,8 @@ export default function ProjectPage() {
         note.trim(),
         { ...attachment, languageCode: lang },
       );
+      setUploadFile(null);
+      setDraftRepo(null);
       toast(t('Submitted for evaluation'));
       retry();
     } catch (err) {
@@ -69,7 +72,7 @@ export default function ProjectPage() {
         notify({ id: `project-${project.id}`, text: 'Your project is saved on this device. It has not been sent for evaluation.', to: `/labs/${project.id}` });
         toast(t('Saved on this device'), 'info');
       } else {
-        setError('The submission did not go through. Your link is still here; try again.');
+        setError(err instanceof ApiRequestError ? err.message : 'The submission did not go through. Your link is still here; try again.');
       }
     }
     setBusy(false);
@@ -102,7 +105,7 @@ export default function ProjectPage() {
 
           <LiquidGlassPanel title={t('Submit your work')} tint="rgb(206 190 255 / .5)">
             <form onSubmit={submit} noValidate className="grid gap-4">
-              <LiquidGlassInput label={t('Repository link')} type="url" icon={<GitBranch aria-hidden />} placeholder="https://github.com/you/project" spellCheck={false} value={repo} error={error && t(error)} onChange={(e) => setRepo(e.target.value)} />
+              <LiquidGlassInput label={t('Repository link')} type="url" icon={<GitBranch aria-hidden />} placeholder="https://github.com/you/project" spellCheck={false} value={repo} error={error && t(error)} onChange={(e) => setDraftRepo(e.target.value)} />
               <LiquidGlassButton size="sm" className="justify-self-start" onClick={() => setPicking(true)}>
                 {t('Pick from my GitHub')}
               </LiquidGlassButton>
@@ -172,7 +175,7 @@ export default function ProjectPage() {
               icon={<Check aria-hidden />}
               aria-label={t('Use {name}', { name: r.name })}
               onClick={() => {
-                setRepo(r.html_url);
+                setDraftRepo(r.html_url);
                 setError('');
                 setPicking(false);
               }}

@@ -5,6 +5,7 @@ import { skillsLearningRoutes } from './routes/skills-learning.ts';
 import { staffRoutes } from './routes/staff.ts';
 import { clientIpHash, type RouteDef } from './router-utils.ts';
 import { ApiError, corsHeaders, errorResponse, SECURITY_HEADERS } from './security.ts';
+import { createNeonRuntime } from './neon-runtime.ts';
 import { createSupabaseRuntime } from './supabase-runtime.ts';
 import type { BackendRuntime } from './types.ts';
 
@@ -55,7 +56,7 @@ function matchRoute(method: string, pathname: string): { route: CompiledRoute; p
 }
 
 export function createApp(runtime?: BackendRuntime, env: ServerEnv = readEnv()) {
-  const rt = runtime ?? createSupabaseRuntime(env);
+  const rt = runtime ?? (env.databaseUrl ? createNeonRuntime(env) : createSupabaseRuntime(env));
 
   async function fetch(req: Request): Promise<Response> {
     const cors = corsHeaders(req, env.allowedOrigins);

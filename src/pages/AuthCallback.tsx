@@ -23,7 +23,19 @@ export default function AuthCallback() {
         go('/login', { replace: true });
         return;
       }
-      const { data, error: err } = await supabase.auth.getSession();
+      const query = new URLSearchParams(location.search);
+      const urlError = query.get('error_description') || query.get('error');
+      if (urlError) {
+        if (live) setError(urlError);
+        return;
+      }
+      const code = query.get('code');
+      let { data, error: err } = await supabase.auth.getSession();
+      if (!data.session && code) {
+        const exchanged = await supabase.auth.exchangeCodeForSession(code);
+        data = { session: exchanged.data.session };
+        err = exchanged.error;
+      }
       if (!live) return;
       if (err || !data.session) {
         setError(err?.message || 'Sign-in link expired or invalid. Please log in again.');

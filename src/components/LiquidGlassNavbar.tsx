@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { setState, useStore } from '../lib/store';
 import { useWorkspace } from '../lib/workspace';
+import { api } from '../services';
 import { LanguageSelector } from './LanguageSelector';
 import { Logo, LogoMark } from './Logo';
 import { SearchBox } from './SearchBox';
@@ -22,9 +23,18 @@ export function Avatar({ name, className = 'size-12 text-lg' }: { name: string; 
 
 function Notifications() {
   const { t, date } = useI18n();
-  const notices = useStore((s) => s.notices);
+  const { authenticated } = useAuth();
+  const { notifications: remoteNotices, retry } = useWorkspace();
+  const localNotices = useStore((s) => s.notices);
+  const notices = authenticated ? remoteNotices : localNotices;
   const unread = notices.filter((n) => !n.read).length;
-  const markRead = () => setState((s) => ({ notices: s.notices.map((n) => ({ ...n, read: true })) }));
+  const markRead = () => {
+    if (authenticated) {
+      void api.markNotificationsRead().then(() => retry(), () => {});
+      return;
+    }
+    setState((s) => ({ notices: s.notices.map((n) => ({ ...n, read: true })) }));
+  };
   return (
     <GlassMenu
       label={t('Notifications')}

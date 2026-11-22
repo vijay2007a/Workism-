@@ -59,11 +59,13 @@ export interface RemoteProfile {
   showScoresPublic: boolean;
   inAppNotices: boolean;
 }
+export interface NotificationItem { id: string; text: string; to: string; read: boolean; at: number }
 export interface Workspace {
   name: string;
   role?: UserRole;
   profile?: RemoteProfile | null;
   roadmap?: Roadmap | null;
+  notifications?: NotificationItem[];
   skills: Skill[];
   courses: Course[];
   projects: Project[];
@@ -261,6 +263,15 @@ export const api = {
   ask: (messages: ChatMessage[], languageCode?: string) =>
     call<{ text: string }>('/api/ai/tutor', { body: { messages, languageCode } }),
 
+  tutorHistory: () =>
+    call<{ messages: { id: string; role: 'user' | 'assistant'; text: string; languageCode: string; createdAt: string }[] }>('/api/ai/tutor/history'),
+
+  clearTutorHistory: () =>
+    call<{ ok: true }>('/api/ai/tutor/history', { method: 'DELETE' }),
+
+  markNotificationsRead: () =>
+    call<{ ok: true }>('/api/notifications/read', { method: 'POST' }),
+
   executeCode: (challengeId: string, languageId: string, code: string) =>
     call<{ status: string; simulated: false; passedCount?: number; totalCount?: number; publicResults?: { ok: boolean; got: string }[]; error?: string; message?: string }>('/api/code/execute', {
       body: { challengeId, languageId, code },
@@ -317,7 +328,7 @@ export const api = {
 
 /** What each screen needs from the backend. Listed in Settings -> Integrations. */
 export const INTEGRATIONS = [
-  { name: 'Learner records', needs: 'GET /api/me/workspace (Supabase RLS)', used: 'Dashboard, skills, courses, projects, certificates' },
+  { name: 'Learner records', needs: 'GET /api/me/workspace (Neon + Supabase)', used: 'Dashboard, skills, courses, projects, certificates' },
   { name: 'Sign-in', needs: 'Supabase Auth (Email, Google OAuth, Recovery)', used: 'Log in, Register' },
   { name: 'Project evaluation', needs: 'POST /api/projects/:id/submissions + Instructor Review', used: 'Project Labs' },
   { name: 'Certificate verification', needs: 'GET /api/verify/:code (HMAC-SHA256)', used: 'Certificates, public verify page' },

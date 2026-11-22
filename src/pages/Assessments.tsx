@@ -5,6 +5,7 @@ import { CHALLENGES } from '../data/challenges';
 import { Chip, Orb } from '../glass/controls';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { PASS_MARK } from '../lib/progress';
 import { useStore } from '../lib/store';
@@ -13,6 +14,7 @@ import { QUIZ_MINUTES } from './Quiz';
 
 export default function Assessments() {
   const { t, number, percent, date } = useI18n();
+  const { authenticated } = useAuth();
   const { skills, courses } = useWorkspace();
   const quiz = useStore((s) => s.quiz);
   const code = useStore((s) => s.code);
@@ -29,7 +31,10 @@ export default function Assessments() {
       <h2 className="mb-3 px-1 text-xl font-bold">{t('Quizzes')}</h2>
       <ul className="mb-8 grid gap-5 tab:grid-cols-2 desk:grid-cols-3">
         {quizzes.map(({ skill, questions }, i) => {
+          const officialTaken = authenticated && skill.source === 'api' && (skill.score > 0 || skill.history.length > 1);
           const result = quiz[skill.id];
+          const taken = officialTaken || Boolean(result);
+          const displayPercent = officialTaken ? skill.score : result?.percent ?? 0;
           return (
             <li key={skill.id}>
               <LiquidGlassPanel className="flex h-full flex-col gap-4" transition={{ type: 'spring', stiffness: 150, damping: 20, delay: i * 0.05 }}>
@@ -43,15 +48,15 @@ export default function Assessments() {
                   </div>
                 </div>
                 <div className="mt-auto flex items-center justify-between gap-3">
-                  {result ? (
-                    <Chip tone={result.percent >= PASS_MARK ? 'good' : 'warn'}>
-                      {percent(result.percent)} · {date(result.at)}
+                  {taken ? (
+                    <Chip tone={displayPercent >= PASS_MARK ? 'good' : 'warn'}>
+                      {officialTaken ? `${percent(displayPercent)} · ${t('Assessed')}` : `${percent(displayPercent)} · ${date(result.at)}`}
                     </Chip>
                   ) : (
                     <Chip>{t('Not taken')}</Chip>
                   )}
-                  <LiquidGlassButton size="sm" variant={result ? 'secondary' : 'primary'} to={`/assessments/quiz/${skill.id}`} aria-label={`${result ? t('Retake') : t('Start')}: ${skill.name}`}>
-                    {result ? t('Retake') : t('Start')}
+                  <LiquidGlassButton size="sm" variant={taken ? 'secondary' : 'primary'} to={`/assessments/quiz/${skill.id}`} aria-label={`${taken ? t('Retake') : t('Start')}: ${skill.name}`}>
+                    {taken ? t('Retake') : t('Start')}
                   </LiquidGlassButton>
                 </div>
               </LiquidGlassPanel>

@@ -26,9 +26,11 @@ export default function Portfolio() {
   const toast = useToast();
   const profile = useStore((s) => s.profile);
   const showScores = useStore((s) => s.settings.showScores);
-  const [slug, setSlug] = useState(remoteProfile?.portfolioSlug ?? '');
-  const [isPublic, setIsPublic] = useState(remoteProfile?.portfolioPublic ?? false);
+  const [draftSlug, setDraftSlug] = useState<string | null>(null);
+  const [draftPublic, setDraftPublic] = useState<boolean | null>(null);
   const [savingShare, setSavingShare] = useState(false);
+  const slug = draftSlug ?? remoteProfile?.portfolioSlug ?? '';
+  const isPublic = draftPublic ?? remoteProfile?.portfolioPublic ?? false;
   const goal = GOALS.find(([v]) => v === profile.goal)?.[1];
   // Only work the backend has confirmed belongs in a portfolio.
   const finished = projects.filter((p) => p.status === 'verified');
@@ -42,6 +44,8 @@ export default function Portfolio() {
         portfolioPublic: isPublic,
         showScoresPublic: showScores,
       });
+      setDraftSlug(null);
+      setDraftPublic(null);
       toast('Portfolio sharing settings saved.');
       retry();
     } catch {
@@ -72,14 +76,14 @@ export default function Portfolio() {
                 label="Public URL slug"
                 placeholder="your-name"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={(e) => setDraftSlug(e.target.value)}
               />
               <LiquidGlassButton variant="primary" loading={savingShare} onClick={() => void saveShare()} icon={<Link2 aria-hidden />}>
                 Save sharing
               </LiquidGlassButton>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <GlassSwitch label="Make portfolio public" checked={isPublic} onChange={setIsPublic} />
+              <GlassSwitch label="Make portfolio public" checked={isPublic} onChange={setDraftPublic} />
               {isPublic && slug.trim() && (
                 <code className="text-sm text-violet-deep">{`${location.origin}/u/${slug.trim().toLowerCase()}`}</code>
               )}

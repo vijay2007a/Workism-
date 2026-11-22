@@ -653,7 +653,7 @@ export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
         return rec;
       },
       async revokeCertificate(certId, actorId, reason) {
-        const cur = issuedCerts.get(certId);
+        const cur = issuedCerts.get(certId) ?? [...issuedCerts.values()].find((c) => c.verificationCode === certId);
         if (!cur) throw new ApiError(404, 'certificate_not_found', 'Certificate not found.');
         const next: IssuedCertificateRecord = {
           ...cur,
@@ -662,7 +662,7 @@ export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
           revokedBy: actorId,
           revocationReason: reason,
         };
-        issuedCerts.set(certId, next);
+        issuedCerts.set(cur.id, next);
         return next;
       },
       async logCertificateVerification(input) {

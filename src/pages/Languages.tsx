@@ -7,14 +7,19 @@ import { LANGUAGE_KINDS, PROGRAMMING_LANGUAGES, type LanguageKind } from '../dat
 import { Chip, Choices } from '../glass/controls';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { useToast } from '../glass/GlassToast';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { searchItems } from '../lib/search';
 import { setProfile, useStore } from '../lib/store';
+import { useWorkspace } from '../lib/workspace';
+import { api } from '../services';
 
 const ALL = PROGRAMMING_LANGUAGES.map((l) => ({ ...l, label: l.name, hint: l.note }));
 
 export default function LanguagesPage() {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
   const toast = useToast();
   const chosen = useStore((s) => s.profile.codeLang);
   const [params, setParams] = useSearchParams();
@@ -64,7 +69,11 @@ export default function LanguagesPage() {
                     aria-label={on ? t('{name}, chosen', { name: l.name }) : t('Choose {name}', { name: l.name })}
                     icon={on ? <Check aria-hidden /> : undefined}
                     onClick={() => {
-                      setProfile({ codeLang: on ? '' : l.id });
+                      const next = on ? '' : l.id;
+                      setProfile({ codeLang: next });
+                      if (authenticated) {
+                        void api.updateProfile({ preferredCodeLanguage: next }).then(() => retry(), () => toast('Could not save language preference.', 'bad'));
+                      }
                       if (!on) toast(t('Challenges will open in {name}.', { name: l.name }));
                     }}
                   >

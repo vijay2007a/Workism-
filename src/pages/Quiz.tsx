@@ -14,7 +14,7 @@ import { useI18n } from '../lib/i18n';
 import { gradeQuiz, PASS_MARK } from '../lib/progress';
 import { notify, setState } from '../lib/store';
 import { skillColor, useWorkspace } from '../lib/workspace';
-import { api, type AssessmentAttemptStart, type AssessmentSubmissionResult, type Question } from '../services';
+import { api, ApiRequestError, type AssessmentAttemptStart, type AssessmentSubmissionResult, type Question } from '../services';
 import NotFound from './NotFound';
 
 export const QUIZ_MINUTES = 5;
@@ -93,7 +93,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
           setState((s) => ({ quiz: { ...s.quiz, [skill.id]: { percent: res.attempt.scorePercent, at: Date.now() } } }));
           retry();
         },
-        () => setError('Could not confirm the official score. Check your skill profile before starting another attempt.'),
+        (err) => setError(err instanceof ApiRequestError ? err.message : 'Could not confirm the official score. Check your skill profile before starting another attempt.'),
       );
       return;
     }
@@ -117,7 +117,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
           <ul className="mb-6 grid gap-2.5 text-[1.0625rem]">
             <li>{authenticated ? t('Timed, server-graded assessment') : t('{n} questions, {m} minutes', { n: number(questions.length), m: number(QUIZ_MINUTES) })}</li>
             <li>{t('You can move between questions and change answers until you hand in.')}</li>
-            <li>{t('This is practice: it is not supervised and does not issue a certificate by itself.')}</li>
+            <li>{authenticated ? 'Official assessment: graded on the server and saved to your skill profile.' : t('This is practice: it is not supervised and does not issue a certificate by itself.')}</li>
           </ul>
           {error && <p role="alert">{t(error)}</p>}
           <LiquidGlassButton variant="primary" size="lg" loading={starting} onClick={() => void startAttempt()}>
@@ -156,7 +156,7 @@ function Sheet({ skill, questions, color, again }: { skill: { id: string; name: 
                 {percent(grade.percent)}
               </h2>
               <p className="mt-1 mb-3 text-[1.0625rem] text-ink-soft">{t('{n} of {total} correct', { n: number(grade.correct), total: number(grade.total) })}</p>
-              <Chip tone={passed ? 'good' : 'warn'}>{passed ? t('Reaches the pass mark') : t('Pass mark is {p}', { p: percent(PASS_MARK) })}</Chip>
+              <Chip tone={passed ? 'good' : 'warn'}>{passed ? t('Reaches the pass mark') : t('Pass mark is {p}', { p: percent(serverResult?.passMark ?? PASS_MARK) })}</Chip>
               {serverResult?.attempt.aiExplanation && (
                 <p className="mt-3 text-sm text-ink-soft">{serverResult.attempt.aiExplanation}</p>
               )}

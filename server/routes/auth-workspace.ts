@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { envCapabilities } from '../env.ts';
-import { enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
+import { assertOwnWorkspaceBodyIds, assertOwnWorkspaceQuery, enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
 import { ApiError, isSafeRedirectUrl, jsonResponse, parseJsonBody } from '../security.ts';
 
 const RegisterSchema = z.object({
@@ -49,7 +49,13 @@ const ProfilePatchSchema = z.object({
   portfolioPublic: z.boolean().optional(),
   showScoresPublic: z.boolean().optional(),
   inAppNotices: z.boolean().optional(),
-}).strict(); // Strictly rejects attempts to patch "role", "id", or "email"
+}).strict(); // Strictly rejects attempts to patch "role" or "email"
+
+const ProfilePatchRequestSchema = ProfilePatchSchema.extend({
+  workspaceId: z.string().trim().min(1).max(128).optional(),
+  userId: z.string().trim().min(1).max(128).optional(),
+  id: z.string().trim().min(1).max(128).optional(),
+}).strict();
 
 export const authWorkspaceRoutes: RouteDef[] = [
   {
@@ -172,6 +178,7 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/auth/session',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const profile = await ctx.runtime.db.getProfile(user.id, user);
       return jsonResponse({
         user: { id: user.id, email: user.email, role: user.role, displayName: profile?.displayName ?? user.displayName },
@@ -184,6 +191,7 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/me/workspace',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const [profile, skills, courses, lessonsDone, projectCatalog, submissions, templates, issuedCerts, roadmap, notifications] = await Promise.all([
         ctx.runtime.db.getProfile(user.id, user),
         ctx.runtime.db.getUserSkills(user.id, user),
@@ -259,6 +267,7 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/profile',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const profile = await ctx.runtime.db.getProfile(user.id, user);
       if (!profile) throw new ApiError(404, 'not_found', 'Profile not found.');
       return jsonResponse({ profile }, 200, ctx.headers);
@@ -269,7 +278,9 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/profile',
     async handler(ctx) {
       const user = await requireAuth(ctx);
-      const patch = await parseJsonBody(ctx.req, ProfilePatchSchema);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
+      const { workspaceId, userId, id, ...patch } = await parseJsonBody(ctx.req, ProfilePatchRequestSchema);
+      assertOwnWorkspaceBodyIds({ workspaceId, userId, id }, user.id);
       const profile = await ctx.runtime.db.updateProfile(user.id, patch, user);
       return jsonResponse({ profile }, 200, ctx.headers);
     },
@@ -279,6 +290,7 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/notifications',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const notifications = await ctx.runtime.db.listNotifications(user.id);
       return jsonResponse({ notifications }, 200, ctx.headers);
     },
@@ -288,6 +300,7 @@ export const authWorkspaceRoutes: RouteDef[] = [
     pattern: '/api/notifications/read',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       await ctx.runtime.db.markNotificationsRead(user.id);
       return jsonResponse({ ok: true }, 200, ctx.headers);
     },

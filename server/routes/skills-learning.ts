@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { buildDeterministicRoadmap, multilingualInstruction, sanitizeAiRoadmap } from '../ai.ts';
-import { enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
+import { assertOwnWorkspaceQuery, enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
 import { ApiError, jsonResponse, parseJsonBody } from '../security.ts';
 
 const StartAttemptSchema = z.object({
@@ -91,6 +91,7 @@ export const skillsLearningRoutes: RouteDef[] = [
     pattern: '/api/skills',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const skills = await ctx.runtime.db.getUserSkills(user.id, user);
       const gaps = skills
         .map((s) => ({ id: s.id, name: s.name, score: s.score, target: s.target, gap: Math.max(s.target - s.score, 0) }))
@@ -306,6 +307,7 @@ export const skillsLearningRoutes: RouteDef[] = [
     pattern: '/api/learning/roadmap',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const roadmap = await ctx.runtime.db.getActiveRoadmap(user.id, user);
       return jsonResponse({ roadmap }, 200, ctx.headers);
     },
@@ -379,6 +381,7 @@ export const skillsLearningRoutes: RouteDef[] = [
     pattern: '/api/ai/tutor/history',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const messages = await ctx.runtime.db.listTutorMessages(user.id, 30);
       return jsonResponse({ messages }, 200, ctx.headers);
     },
@@ -390,6 +393,7 @@ export const skillsLearningRoutes: RouteDef[] = [
     pattern: '/api/ai/tutor/history',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       await ctx.runtime.db.clearTutorMessages(user.id);
       return jsonResponse({ ok: true }, 200, ctx.headers);
     },

@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Chip } from '../glass/controls';
 import { useToast } from '../glass/GlassToast';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
+import { LiquidGlassInput } from '../glass/LiquidGlassInput';
 import { LiquidGlassPanel } from '../glass/LiquidGlassPanel';
 import { useWorkspace } from '../lib/workspace';
 import { api, type RemoteProfile, type UserRole } from '../services';
@@ -16,6 +17,9 @@ export default function Admin() {
   const [logs, setLogs] = useState<{ id: string; action: string; resource_type: string; resource_id: string | null; created_at: string }[]>([]);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [revokeCode, setRevokeCode] = useState('');
+  const [revokeReason, setRevokeReason] = useState('');
+  const [revoking, setRevoking] = useState(false);
 
   const allowed = role === 'admin';
 
@@ -56,6 +60,26 @@ export default function Admin() {
     } catch {
       toast('Could not change role.', 'bad');
     }
+  };
+
+  const revoke = async () => {
+    const id = revokeCode.trim();
+    const reason = revokeReason.trim();
+    if (!id || reason.length < 5) {
+      toast('Enter a certificate ID or WRK code and a reason (min 5 characters).', 'bad');
+      return;
+    }
+    setRevoking(true);
+    try {
+      await api.revokeCertificate(id, reason);
+      setRevokeCode('');
+      setRevokeReason('');
+      toast('Certificate revoked.');
+      setReload((n) => n + 1);
+    } catch {
+      toast('Could not revoke certificate. Check the code or ID.', 'bad');
+    }
+    setRevoking(false);
   };
 
   return (
@@ -100,6 +124,16 @@ export default function Admin() {
           </ul>
         </LiquidGlassPanel>
       </div>
+
+      <LiquidGlassPanel title="Revoke Certificate" className="mt-5">
+        <div className="grid gap-4 tab:grid-cols-[1fr_1.5fr_auto] tab:items-end">
+          <LiquidGlassInput label="Certificate code or ID" placeholder="WRK-XXXX-XXXX-XXXX" value={revokeCode} onChange={(e) => setRevokeCode(e.target.value)} />
+          <LiquidGlassInput label="Revocation reason" placeholder="Academic integrity or issuance correction" value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} />
+          <LiquidGlassButton variant="danger" loading={revoking} onClick={() => void revoke()}>
+            Revoke
+          </LiquidGlassButton>
+        </div>
+      </LiquidGlassPanel>
     </>
   );
 }

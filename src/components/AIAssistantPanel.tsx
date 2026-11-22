@@ -4,10 +4,11 @@ import { AnimatePresence, motion } from 'motion/react';
 import { GUIDE } from '../data/guide';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
 import { useRefraction } from '../glass/refraction';
+import { useAuth } from '../lib/auth';
 import { cn } from '../lib/cn';
 import { useCalm } from '../lib/effects';
 import { useI18n } from '../lib/i18n';
-import { api, connected, NotConnected, type ChatMessage } from '../services';
+import { api, ApiRequestError, connected, NotConnected, type ChatMessage } from '../services';
 
 interface Entry extends ChatMessage { id: number; error?: boolean; guide?: boolean; fresh?: boolean }
 
@@ -19,8 +20,24 @@ let nextId = 0;
 /** One conversation, shared by the floating panel and the assistant page. Kept in memory only. */
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const { t, lang } = useI18n();
+  const { authenticated } = useAuth();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let live = true;
+    void api.tutorHistory().then(
+      (res) => {
+        if (!live || res.messages.length === 0) return;
+        setEntries((cur) => (cur.length ? cur : res.messages.map((m) => ({ id: nextId++, role: m.role, text: m.text }))));
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [authenticated]);
 
   const answer = useCallback(
     async (history: Entry[]) => {
@@ -41,7 +58,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           text:
             e instanceof NotConnected
               ? t('The assistant service is not connected yet, so only the suggested questions have answers.')
-              : t('The assistant did not answer. Check your connection and try again.'),
+              : e instanceof ApiRequestError
+                ? e.message
+                : t('The assistant did not answer. Check your connection and try again.'),
         };
       }
       setEntries((l) => [...l, { ...reply, id: nextId++, role: 'assistant' }]);
@@ -64,9 +83,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         setEntries(next);
         void answer(next);
       },
-      clear: () => setEntries([]),
+      clear() {
+        setEntries([]);
+        if (authenticated) void api.clearTutorHistory().catch(() => {});
+      },
     }),
-    [entries, busy, answer],
+    [entries, busy, answer, authenticated],
   );
   return <Ctx value={chat}>{children}</Ctx>;
 }

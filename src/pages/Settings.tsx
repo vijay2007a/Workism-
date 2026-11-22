@@ -15,6 +15,7 @@ import { LiquidGlassTabs } from '../glass/LiquidGlassTabs';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { getState, resetState, setProfile, setSettings, useStore } from '../lib/store';
+import { useWorkspace } from '../lib/workspace';
 import { api, connected, INTEGRATIONS } from '../services';
 
 const TABS = ['profile', 'preferences', 'language', 'appearance', 'notifications', 'privacy', 'integrations'] as const;
@@ -59,13 +60,16 @@ const useTranslated = () => {
 function Profile() {
   const { t } = useI18n();
   const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
   const toast = useToast();
   const tr = useTranslated();
   const p = useStore((s) => s.profile);
   const sync = async () => {
     if (!authenticated) return;
     try {
-      await api.updateProfile({ displayName: p.name.trim(), careerGoal: p.goal, interests: p.interests });
+      const displayName = p.name.trim();
+      await api.updateProfile({ ...(displayName ? { displayName } : {}), careerGoal: p.goal, interests: p.interests });
+      retry();
       toast('Profile synced to account.');
     } catch {
       toast('Could not sync profile.', 'bad');
@@ -96,20 +100,51 @@ function Profile() {
 
 function Preferences() {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
+  const toast = useToast();
   const tr = useTranslated();
   const p = useStore((s) => s.profile);
+  const save = async (patch: Parameters<typeof api.updateProfile>[0]) => {
+    if (!authenticated) return;
+    try {
+      await api.updateProfile(patch);
+      retry();
+    } catch {
+      toast('Could not save preference to account.', 'bad');
+    }
+  };
   return (
     <>
       <Group title={t('Style')}>
-        <Choices label={t('Style')} options={tr(STYLES)} value={[p.style]} onChange={(style) => setProfile({ style })} />
+        <Choices
+          label={t('Style')}
+          options={tr(STYLES)}
+          value={[p.style]}
+          onChange={(style) => {
+            setProfile({ style });
+            void save({ learningStyle: style });
+          }}
+        />
       </Group>
       <Group title={t('Pace')}>
-        <Choices label={t('Pace')} options={tr(PACES)} value={[p.pace]} onChange={(pace) => setProfile({ pace })} />
+        <Choices
+          label={t('Pace')}
+          options={tr(PACES)}
+          value={[p.pace]}
+          onChange={(pace) => {
+            setProfile({ pace });
+            void save({ learningPace: pace });
+          }}
+        />
       </Group>
       <GlassSelect
         label={t('Programming language')}
         value={p.codeLang}
-        onChange={(codeLang) => setProfile({ codeLang })}
+        onChange={(codeLang) => {
+          setProfile({ codeLang });
+          void save({ preferredCodeLanguage: codeLang });
+        }}
         options={[['', t('No preference')] as const, ...PROGRAMMING_LANGUAGES.map((l) => [l.id, l.name] as const)]}
       />
     </>
@@ -164,10 +199,23 @@ function Appearance() {
 
 function Notifications() {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
+  const toast = useToast();
   const on = useStore((s) => s.settings.notices);
   return (
     <>
-      <GlassSwitch label={t('In-app notices')} hint={t('Quiz results, saved projects and finished courses, under the bell.')} checked={on} onChange={(notices) => setSettings({ notices })} />
+      <GlassSwitch
+        label={t('In-app notices')}
+        hint={t('Quiz results, saved projects and finished courses, under the bell.')}
+        checked={on}
+        onChange={(notices) => {
+          setSettings({ notices });
+          if (authenticated) {
+            void api.updateProfile({ inAppNotices: notices }).then(() => retry(), () => toast('Could not save notification preference.', 'bad'));
+          }
+        }}
+      />
       <p className="lg-inset mt-5 rounded-2xl px-4 py-3 text-[0.9375rem]">{t('Email and push reminders need the notification service, which is not connected.')}</p>
     </>
   );
@@ -175,6 +223,8 @@ function Notifications() {
 
 function Privacy() {
   const { t } = useI18n();
+  const { authenticated } = useAuth();
+  const { retry } = useWorkspace();
   const toast = useToast();
   const [asking, setAsking] = useState(false);
   const showScores = useStore((s) => s.settings.showScores);
@@ -186,7 +236,16 @@ function Privacy() {
   };
   return (
     <>
-      <GlassSwitch label={t('Show scores on my portfolio')} checked={showScores} onChange={(v) => setSettings({ showScores: v })} />
+      <GlassSwitch
+        label={t('Show scores on my portfolio')}
+        checked={showScores}
+        onChange={(v) => {
+          setSettings({ showScores: v });
+          if (authenticated) {
+            void api.updateProfile({ showScoresPublic: v }).then(() => retry(), () => toast('Could not save privacy preference.', 'bad'));
+          }
+        }}
+      />
       <div className="mt-6 grid gap-3 border-t border-white/60 pt-6 tab:grid-cols-2">
         <LiquidGlassButton icon={<Download aria-hidden />} onClick={download}>
           {t('Download my data')}

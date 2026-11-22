@@ -2,14 +2,17 @@ import { useMemo, useState } from 'react';
 import { Check, Globe, Search } from 'lucide-react';
 import { GlassMenu } from '../glass/GlassMenu';
 import { LiquidGlassButton } from '../glass/LiquidGlassButton';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { dirOf, LANGS } from '../lib/lang';
 import { searchItems } from '../lib/search';
 import { setSettings } from '../lib/store';
+import { api } from '../services';
 
 /** The list itself, shared by the navbar popover, onboarding and Settings. Every language is named in its own script. */
 export function LanguageList({ onPick }: { onPick?: () => void }) {
   const { t, lang } = useI18n();
+  const { authenticated } = useAuth();
   const [query, setQuery] = useState('');
   const all = useMemo(() => LANGS.map((l) => ({ ...l, label: l.english, hint: l.native })), []);
   const list = query.trim() ? searchItems(all, query) : all;
@@ -30,6 +33,7 @@ export function LanguageList({ onPick }: { onPick?: () => void }) {
               className="lg-language"
               onClick={() => {
                 setSettings({ lang: l.code });
+                if (authenticated) void api.updateProfile({ preferredLanguage: l.code }).catch(() => {});
                 onPick?.();
               }}
             >

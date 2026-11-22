@@ -7,7 +7,7 @@ import {
   signCertificatePayload,
   verifyCertificateSignature,
 } from '../certificates.ts';
-import { enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
+import { assertOwnWorkspaceBodyIds, assertOwnWorkspaceQuery, enforceRateLimit, requireAuth, type RouteDef } from '../router-utils.ts';
 import { ApiError, isSafeGithubRepoUrl, jsonResponse, parseJsonBody, SECURITY_HEADERS } from '../security.ts';
 import { buildSubmissionStoragePath, validateUploadBytes, validateUploadMetadata } from '../uploads.ts';
 
@@ -35,10 +35,16 @@ const PortfolioPatchSchema = z.object({
   portfolioPublic: z.boolean().optional(),
   showScoresPublic: z.boolean().optional(),
   githubUsername: z.string().trim().regex(/^$|^[A-Za-z0-9-]{1,39}$/).optional(),
+  workspaceId: z.string().trim().min(1).max(128).optional(),
+  userId: z.string().trim().min(1).max(128).optional(),
+  id: z.string().trim().min(1).max(128).optional(),
 }).strict();
 
 async function handlePublicVerify(ctx: Parameters<RouteDef['handler']>[0]) {
   await enforceRateLimit(ctx, 'cert:verify', ctx.ipHash, 60, 600);
+  if (ctx.env.certificateSigningSecret.length < 32) {
+    throw new ApiError(503, 'signing_not_configured', 'Certificate verification is not configured on this server.');
+  }
   const code = decodeURIComponent(ctx.params.code || ctx.params.id || '').trim();
   if (!code || code.length > 64) {
     throw new ApiError(400, 'invalid_code', 'Invalid certificate verification code.');
@@ -97,6 +103,7 @@ export const projectsCertsRoutes: RouteDef[] = [
     pattern: '/api/projects',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const [projects, submissions] = await Promise.all([
         ctx.runtime.db.listProjects(),
         ctx.runtime.db.listUserProjectSubmissions(user.id, user),
@@ -164,7 +171,8 @@ export const projectsCertsRoutes: RouteDef[] = [
         if (!fileName || !fileMime || !fileSizeBytes) throw new ApiError(400, 'missing_metadata', 'Uploaded file details are required.');
         const meta = validateUploadMetadata(fileName, fileMime, fileSizeBytes);
         const file = await ctx.runtime.storage.readUpload(storagePath);
-        if (file.size !== fileSizeBytes || file.type.split(';')[0] !== meta.mime || !storagePath.endsWith('-' + meta.safeName)) {
+        const storedMime = file.type.split(';')[0].trim().toLowerCase();
+        if (file.size !== fileSizeBytes || storedMime !== meta.mime || !storagePath.endsWith('-' + meta.safeName)) {
           throw new ApiError(400, 'upload_mismatch', 'Stored file details differ from the submission.');
         }
         const bytes = Buffer.from(await file.arrayBuffer());
@@ -199,10 +207,11 @@ export const projectsCertsRoutes: RouteDef[] = [
           }),
           maxOutputTokens: 500,
         });
+        const cleanedAi = aiRes.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
         const feedback = z.object({
           observations: z.array(z.string().trim().min(1).max(400)).min(1).max(5),
           nextSteps: z.array(z.string().trim().min(1).max(400)).min(1).max(5),
-        }).parse(JSON.parse(aiRes.text));
+        }).parse(JSON.parse(cleanedAi));
         aiFeedback = [...feedback.observations, ...feedback.nextSteps].join('\n');
       } catch {
         aiFeedback = null;
@@ -235,6 +244,7 @@ export const projectsCertsRoutes: RouteDef[] = [
     pattern: '/api/certificates',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const [templates, issued, courses, lessonsDone, skills, submissions] = await Promise.all([
         ctx.runtime.db.listCertificateTemplates(),
         ctx.runtime.db.listUserCertificates(user.id, user),
@@ -351,6 +361,9 @@ export const projectsCertsRoutes: RouteDef[] = [
     pattern: '/api/certificates/:code/pdf',
     async handler(ctx) {
       await enforceRateLimit(ctx, 'cert:pdf', ctx.ipHash, 30, 600);
+      if (ctx.env.certificateSigningSecret.length < 32) {
+        throw new ApiError(503, 'signing_not_configured', 'Certificate signing secret is not configured on this server.');
+      }
       const code = decodeURIComponent(ctx.params.code).trim();
       const cert = await ctx.runtime.db.getIssuedCertificateByCode(code);
       if (!cert) throw new ApiError(404, 'certificate_not_found', 'Certificate not found.');
@@ -377,6 +390,7 @@ export const projectsCertsRoutes: RouteDef[] = [
     pattern: '/api/portfolio',
     async handler(ctx) {
       const user = await requireAuth(ctx);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
       const [profile, skills, projects, submissions, certs] = await Promise.all([
         ctx.runtime.db.getProfile(user.id, user),
         ctx.runtime.db.getUserSkills(user.id, user),
@@ -403,7 +417,9 @@ export const projectsCertsRoutes: RouteDef[] = [
     pattern: '/api/portfolio',
     async handler(ctx) {
       const user = await requireAuth(ctx);
-      const body = await parseJsonBody(ctx.req, PortfolioPatchSchema);
+      assertOwnWorkspaceQuery(ctx.url, user.id);
+      const { workspaceId, userId, id, ...body } = await parseJsonBody(ctx.req, PortfolioPatchSchema);
+      assertOwnWorkspaceBodyIds({ workspaceId, userId, id }, user.id);
       const profile = await ctx.runtime.db.updateProfile(user.id, body, user);
       return jsonResponse({ profile }, 200, ctx.headers);
     },

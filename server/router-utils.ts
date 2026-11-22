@@ -63,3 +63,23 @@ export async function enforceRateLimit(
 export function clientIpHash(req: Request): string {
   return hashIdentifier(getClientIp(req));
 }
+
+export function assertOwnWorkspaceQuery(url: URL, userId: string): void {
+  for (const param of ['workspaceId', 'userId', 'id']) {
+    const supplied = url.searchParams.get(param)?.trim();
+    if (supplied && supplied !== userId) {
+      throw new ApiError(403, 'forbidden', 'Cannot access another user workspace.');
+    }
+  }
+}
+
+export function assertOwnWorkspaceBodyIds(
+  ids: { workspaceId?: string; userId?: string; id?: string },
+  userId: string,
+): void {
+  for (const supplied of [ids.workspaceId, ids.userId, ids.id]) {
+    if (supplied !== undefined && supplied !== userId) {
+      throw new ApiError(403, 'forbidden', 'Cannot modify another user workspace.');
+    }
+  }
+}

@@ -1,0 +1,255 @@
+/* Screen structure and one-off pieces. Materials and tokens live in index.css. */
+@layer components {
+  /* ---------- workspace ---------- */
+  .app { overflow-x: clip; padding: 0 0 6.5rem; }
+  .app-shell { max-width: 88rem; min-height: 100dvh; margin-inline: auto; padding: 0 1rem 1.5rem; border-radius: 0; }
+  .app-shell::before { display: none; }
+  .app-grid { display: grid; gap: var(--gap); }
+  .app-main { min-width: 0; outline: none; }
+  /* Long code lines scroll inside their own box instead of widening the page. */
+  :where(.app-main, .landing) :where(.grid, .dash-top, .dash-bottom) > * { min-width: 0; }
+  .dash-bottom { display: grid; gap: 1.25rem; margin-top: 1.25rem; }
+  .lg-skip { position: fixed; top: 0.75rem; inset-inline-start: 0.75rem; z-index: 90; padding: 0.7rem 1.2rem; border-radius: 99px; background: #fff; color: var(--color-violet-deep); font-weight: 600; transform: translateY(-200%); }
+  .lg-skip:focus { transform: none; }
+
+  @media (width >= 46rem) {
+    .app { padding: 1.6rem 1.6rem 4.5rem; }
+    .app-shell { min-height: 0; padding: 0.4rem 1.4rem 1.9rem; border-radius: 3.5rem; }
+    .app-shell::before { display: block; }
+    .app-grid { --side: 5rem; grid-template-columns: var(--side) minmax(0, 1fr); transition: grid-template-columns 0.5s cubic-bezier(0.3, 1.2, 0.5, 1); }
+  }
+  @media (width >= 64rem) { .dash-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (width >= 74rem) {
+    .app-grid { --side: 13.75rem; }
+    .app-grid[data-mini] { --side: 5rem; }
+    /* As in the reference, the lower cards run underneath the sidebar. */
+    .app-grid[data-dash] { grid-template-rows: auto auto; }
+    .app-grid[data-dash] > .app-main { grid-area: 1 / 1 / 3 / 3; display: grid; grid-template: subgrid / subgrid; }
+    .app-grid[data-dash] > .lg-sidebar { grid-area: 1 / 1; position: relative; top: 0; z-index: 2; }
+    .app-grid[data-dash] .dash-top { grid-area: 1 / 2; min-width: 0; }
+    .app-grid[data-dash] .dash-bottom { grid-area: 2 / 1 / 3 / 3; margin: 0; }
+    /* The loading skeleton and error panel keep to the content column. */
+    .app-grid[data-dash] > .app-main > :not(.dash-top, .dash-bottom) { grid-area: 1 / 2; }
+  }
+
+  /* ---------- navbar ---------- */
+  .lg-navbar { position: relative; z-index: 30; display: flex; align-items: center; gap: 1.25rem; margin-bottom: 0.4rem; padding: 1.15rem 0.6rem 1.1rem; }
+  .lg-avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    border-radius: 50%;
+    font-weight: 650;
+    color: #fff;
+    text-shadow: 0 1px 2px rgb(50 20 120 / 0.4);
+    background: radial-gradient(60% 40% at 34% 16%, rgb(255 255 255 / 0.75), transparent 72%), linear-gradient(150deg, #b583f4, #6d55ee 60%, #4f8df4);
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.9), 0 0.5rem 1rem -0.4rem rgb(70 50 150 / 0.55);
+  }
+  .lg-profile { display: flex; align-items: center; gap: 0.55rem; border-radius: 99px; }
+  .lg-dot { position: absolute; top: -0.05rem; inset-inline-end: 0.02rem; width: 0.72rem; height: 0.72rem; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #ff9aa8, #ef3f5c); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85); pointer-events: none; }
+  @media (width < 46rem) {
+    .lg-navbar { position: sticky; top: 0; gap: 0.6rem; margin-inline: -1rem; padding: 0.75rem 1rem; background: linear-gradient(180deg, rgb(236 226 240 / 0.88), rgb(230 222 242 / 0.66)); backdrop-filter: blur(18px) saturate(1.5); box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.7), 0 0.8rem 1.4rem -1rem rgb(70 56 130 / 0.5); }
+    .lg-navbar .lg-avatar { width: 2.75rem; height: 2.75rem; }
+  }
+
+  /* ---------- sidebar ---------- */
+  .lg-sidebar { --tint: rgb(255 255 255 / 0.5); position: sticky; top: 1.6rem; z-index: 5; align-self: start; display: flex; flex-direction: column; min-height: 34rem; padding: 2rem 0.3rem 1.1rem; }
+  .app-grid[data-dash] > .lg-sidebar { align-self: stretch; }
+  .lg-sidebar .lg-nav-item { padding-inline: 1.1rem; }
+  /* Long translations wrap rather than being cut. */
+  .lg-nav-label { min-width: 0; overflow-wrap: anywhere; line-height: 1.22; }
+  .lg-sidebar .lg-nav-item:lang(ta), .lg-sidebar .lg-nav-item:lang(ml), .lg-sidebar .lg-nav-item:lang(te), .lg-sidebar .lg-nav-item:lang(kn) { font-size: 0.9375rem; }
+  .lg-sidebar .lg-nav-label { transition: opacity 0.25s; }
+  .lg-side-toggle { position: absolute; inset-inline-end: -0.55rem; top: 2.65rem; z-index: 6; display: none; place-items: center; width: 1.65rem; height: 1.65rem; border-radius: 50%; color: #4c4f68; background: linear-gradient(180deg, #fff, #e9e2fb); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8), 0 0.4rem 0.8rem -0.2rem rgb(70 56 130 / 0.5); opacity: 0; transition: opacity 0.25s; }
+  .lg-side-toggle::before { content: ''; position: absolute; inset: -0.4rem; }
+  .lg-sidebar:hover .lg-side-toggle, .lg-side-toggle:focus-visible { opacity: 1; }
+  @media (width >= 74rem) { .lg-side-toggle { display: grid; } }
+  @media (46rem <= width < 74rem) {
+    .lg-sidebar .lg-nav-label { position: absolute; opacity: 0; pointer-events: none; white-space: nowrap; }
+    .lg-sidebar .lg-nav-item { justify-content: center; padding-inline: 0; }
+  }
+  @media (width >= 74rem) {
+    [data-mini] .lg-sidebar .lg-nav-label { position: absolute; opacity: 0; pointer-events: none; white-space: nowrap; }
+    [data-mini] .lg-sidebar .lg-nav-item { justify-content: center; padding-inline: 0; }
+  }
+
+  /* ---------- phone navigation ---------- */
+  .lg-mobile-nav { position: fixed; inset-inline: 0.75rem; bottom: max(0.75rem, env(safe-area-inset-bottom)); z-index: 40; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.15rem; padding: 0.4rem; border-radius: 2.2rem; }
+  .lg-mobile-item { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem; min-width: 0; min-height: 3.5rem; padding: 0.3rem 0.2rem; border-radius: 1.8rem; font-size: 0.6875rem; font-weight: 550; line-height: 1.15; text-align: center; color: #3a3c54; -webkit-tap-highlight-color: transparent; }
+  .lg-mobile-item > svg { flex: none; width: 1.45rem; height: 1.45rem; stroke-width: 1.6; }
+  .lg-mobile-item > span:last-child { display: -webkit-box; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+  .lg-mobile-item:lang(ml) > span:last-child, .lg-mobile-item:lang(te) > span:last-child, .lg-mobile-item:lang(kn) > span:last-child, .lg-mobile-item:lang(ta) > span:last-child { font-size: 0.625rem; -webkit-line-clamp: 2; }
+  .lg-mobile-item[aria-current='page'] { color: #fff; }
+
+  .lg-language { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%; min-height: 3.2rem; padding: 0.4rem 0.95rem; border-radius: 1.1rem; text-align: start; transition: background 0.2s; }
+  .lg-language:hover { background: rgb(255 255 255 / 0.7); }
+  .lg-language[aria-pressed='true'] { color: #fff; background: linear-gradient(98deg, #7553f3, #6746ea); box-shadow: inset 0 1.5px 1px rgb(255 255 255 / 0.5), 0 0.7rem 1rem -0.6rem rgb(101 66 240 / 0.8); }
+
+  /* ---------- dashboard pieces ---------- */
+  .lg-swells { position: absolute; top: -1.2rem; inset-inline-end: 0; width: min(28rem, 46%); height: 12.4rem; overflow: visible; pointer-events: none; }
+  [dir='rtl'] .lg-swells { transform: scaleX(-1); }
+  @media (width < 46rem) { .lg-swells { width: 64%; opacity: 0.55; } }
+  .lg-wave { display: inline-block; transform-origin: 70% 75%; animation: hello 1.7s 0.5s ease-in-out 1; }
+  @keyframes hello { 0%, 60%, 100% { rotate: 0deg; } 10%, 30%, 50% { rotate: 16deg; } 20%, 40% { rotate: -10deg; } }
+  .lg-skill-row { display: flex; align-items: center; gap: 0.75rem; min-height: 2.85rem; padding: 0.2rem 0.6rem; border-radius: 1.1rem; transition: background 0.25s, transform 0.4s var(--jelly); }
+  .lg-skill-row[data-active] { background: rgb(255 255 255 / 0.5); transform: translateX(3px); }
+  [dir='rtl'] .lg-skill-row[data-active] { transform: translateX(-3px); }
+  .lg-insight { background: linear-gradient(105deg, rgb(255 206 238 / 0.72), rgb(232 214 255 / 0.5) 48%, rgb(222 232 255 / 0.42)); }
+  .lg-thumb { display: grid; place-items: center; flex: none; border-radius: 1.25rem; background: linear-gradient(160deg, rgb(255 255 255 / 0.95), rgb(244 236 255 / 0.6)); box-shadow: inset 0 1.5px 1px #fff, inset 0 0 0 1px rgb(255 255 255 / 0.7), 0 0.8rem 1.2rem -0.7rem rgb(90 66 170 / 0.55); }
+
+  .lg-certificate {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 11.5rem;
+    padding: 1rem 1.2rem;
+    border-radius: 1.35rem;
+    background:
+      radial-gradient(80% 90% at 100% 0%, rgb(190 240 250 / 0.8), transparent 70%),
+      radial-gradient(70% 90% at 0% 100%, rgb(222 196 255 / 0.85), transparent 72%),
+      linear-gradient(150deg, rgb(255 255 255 / 0.86), rgb(240 234 255 / 0.62));
+    box-shadow: inset 0 1.5px 1px #fff, inset 0 0 0 4px rgb(255 255 255 / 0.2), inset 0 0 1.6rem rgb(255 255 255 / 0.5), 0 1.1rem 1.7rem -0.9rem rgb(80 66 150 / 0.55);
+  }
+  .lg-certificate-waves { position: absolute; inset: auto 0 0; z-index: -1; width: 100%; height: 52%; }
+  .lg-qr { width: 6.2rem; height: 6.2rem; padding: 0.35rem; border-radius: 0.9rem; background: #fff; box-shadow: 0 0.9rem 1.5rem -0.7rem rgb(80 66 150 / 0.6); }
+
+  /* Light gathering along the lower lip of the slab. Wider than the slab so no glow meets an edge. */
+  .lg-shell-flares { position: absolute; inset: auto -4rem -3.4rem; z-index: -1; height: 9rem; pointer-events: none; }
+  .lg-shell-flares::before, .lg-shell-flares::after { content: ''; position: absolute; inset: 0; }
+  .lg-shell-flares::before {
+    background:
+      radial-gradient(4rem 1.8rem at 62% 50%, rgb(255 234 216 / 0.85), transparent 74%),
+      radial-gradient(5rem 2.6rem at 93.4% 47%, rgb(255 240 222 / 0.95), transparent 74%),
+      radial-gradient(13rem 3rem at 85% 36%, rgb(150 240 240 / 0.55), transparent 74%),
+      radial-gradient(11rem 2.6rem at 28% 48%, rgb(255 214 232 / 0.85), transparent 74%),
+      radial-gradient(5rem 2.2rem at 8.5% 50%, rgb(255 246 238 / 0.9), transparent 74%);
+  }
+  .lg-shell-flares::after {
+    filter: blur(14px);
+    background:
+      radial-gradient(18rem 1.9rem at 47% 74%, rgb(120 130 240 / 0.5), transparent 74%),
+      radial-gradient(12rem 1.8rem at 66% 78%, rgb(226 130 240 / 0.6), transparent 74%),
+      radial-gradient(13rem 1.8rem at 86% 72%, rgb(110 226 240 / 0.6), transparent 74%),
+      radial-gradient(10rem 1.6rem at 28% 74%, rgb(255 190 220 / 0.6), transparent 74%);
+  }
+  @media (width < 46rem) { .lg-shell-flares { display: none; } }
+
+  /* ---------- learning ---------- */
+  .lg-fab { position: fixed; inset-inline-end: 2rem; bottom: 2rem; z-index: 35; }
+  @media (width < 46rem) { .lg-fab { inset-inline-end: 1rem; bottom: 6.6rem; } }
+  .lg-roadmap { position: relative; height: 16.5rem; margin-top: 1.2rem; }
+  .lg-roadmap-path { position: absolute; inset: 0; width: 100%; height: 13rem; overflow: visible; }
+  [dir='rtl'] .lg-roadmap-path { transform: scaleX(-1); }
+  .lg-roadmap li { position: absolute; inset-inline-start: var(--x); top: calc(13rem * var(--n)); width: 10.5rem; margin-inline-start: -5.25rem; }
+  .lg-roadmap-node { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; margin-top: -2.1rem; border-radius: 1.5rem; text-align: center; }
+  .lg-roadmap-node .lg-orb { width: 4.2rem; height: 4.2rem; flex: none; transition: scale 0.45s var(--jelly); }
+  .lg-roadmap-node:hover .lg-orb { scale: 1.08; }
+  .lg-roadmap-node .lg-orb[data-current] { box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.9), inset 0 0 0.8rem rgb(255 255 255 / 0.5), 0 0 0 5px rgb(255 255 255 / 0.5), 0 0 0 7px rgb(138 99 251 / 0.55), 0 0.9rem 1.5rem -0.6rem var(--orb); }
+  .lg-roadmap-text { max-width: 100%; padding: 0.1rem 0.4rem; }
+  @media (width < 64rem) {
+    .lg-roadmap { height: auto; }
+    .lg-roadmap-path { display: none; }
+    .lg-roadmap ol { position: relative; display: grid; gap: 0.8rem; }
+    .lg-roadmap ol::before { content: ''; position: absolute; inset-block: 1.5rem; inset-inline-start: 1.35rem; width: 0.55rem; border-radius: 99px; background: linear-gradient(180deg, #7fdcd4, #a7c2ff 50%, #d6c8ff); box-shadow: inset 0 0 2px rgb(255 255 255 / 0.9); }
+    .lg-roadmap li { position: relative; inset: auto; width: auto; margin: 0; }
+    .lg-roadmap-node { flex-direction: row; gap: 1rem; margin: 0; text-align: start; }
+    .lg-roadmap-node .lg-orb { width: 3.25rem; height: 3.25rem; animation: none; }
+  }
+  .lg-course-art { display: grid; place-items: center; flex: none; width: 10.5rem; min-height: 9.5rem; border-radius: 1.35rem; background: radial-gradient(80% 70% at 20% 10%, rgb(255 255 255 / 0.85), transparent 70%), linear-gradient(150deg, #cfe0ff, #dccbff 55%, #ffd5e6); box-shadow: inset 0 1.5px 1px #fff, inset 0 0 0 1px rgb(255 255 255 / 0.7), 0 0.9rem 1.4rem -0.9rem rgb(80 66 150 / 0.6); }
+  .lg-course-art[data-skill='py'] { background: radial-gradient(80% 70% at 20% 10%, rgb(255 255 255 / 0.85), transparent 70%), linear-gradient(150deg, #ffe0d2, #ffc9e2 50%, #d6ccff); }
+  .lg-course-art[data-skill='ml'] { background: radial-gradient(80% 70% at 20% 10%, rgb(255 255 255 / 0.85), transparent 70%), linear-gradient(150deg, #c6f0f4, #c8d8ff 55%, #e0ccff); }
+  .lg-course-art[data-skill='db'] { background: radial-gradient(80% 70% at 20% 10%, rgb(255 255 255 / 0.85), transparent 70%), linear-gradient(150deg, #ffd6ea, #e2ccff 55%, #c6dcff); }
+  .lg-course-art[data-skill='cl'] { background: radial-gradient(80% 70% at 20% 10%, rgb(255 255 255 / 0.85), transparent 70%), linear-gradient(150deg, #cfeaff, #c9f2ee 55%, #ffe6d2); }
+  @media (width < 30rem) { .lg-course-art { width: 100%; min-height: 8rem; } }
+  .lg-option { display: flex; align-items: center; width: 100%; min-height: 3.25rem; padding: 0.6rem 1.25rem; border-radius: 1.35rem; text-align: start; cursor: pointer; background: linear-gradient(180deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.36)); box-shadow: inset 0 1.5px 1px #fff, inset 0 -1.5px 2px rgb(255 255 255 / 0.8), 0 0.6rem 1rem -0.7rem rgb(80 66 150 / 0.5); transition: box-shadow 0.25s, background 0.25s; }
+  .lg-option:hover { background: rgb(255 255 255 / 0.82); }
+  .lg-option:has(:focus-visible) { outline: 2.5px solid var(--color-violet); outline-offset: 3px; }
+  .lg-option[data-on] { color: #fff; background: linear-gradient(98deg, #7553f3, #6746ea); }
+  .lg-option[data-mark='right'] { background: linear-gradient(180deg, #dcf9f2, #b9eee2); box-shadow: inset 0 0 0 2px var(--color-good); }
+  .lg-option[data-mark='wrong'] { background: linear-gradient(180deg, #fff0f3, #ffdbe4); box-shadow: inset 0 0 0 2px var(--color-bad); }
+  .lg-compare { position: relative; height: 1.25rem; border-radius: 99px; background: linear-gradient(180deg, rgb(120 104 180 / 0.2), rgb(255 255 255 / 0.5)); box-shadow: inset 0 2px 4px rgb(70 56 130 / 0.22), inset 0 -1.5px 1px rgb(255 255 255 / 0.95); }
+  .lg-compare-fill { display: block; height: 100%; border-radius: 99px; box-shadow: inset 0 0.22rem 0.3rem rgb(255 255 255 / 0.55), inset 0 -0.22rem 0.35rem rgb(255 255 255 / 0.35); }
+  .lg-compare-goal { position: absolute; inset-block: -0.25rem; width: 3px; margin-inline-start: -1.5px; border-radius: 9px; background: var(--color-ink); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.8); }
+
+  /* ---------- public pages ---------- */
+  .landing { overflow-x: clip; padding: 1rem clamp(1rem, 4vw, 3.5rem) 2rem; }
+  .landing-bar { position: sticky; top: 1rem; z-index: 40; display: flex; align-items: center; gap: 1rem; max-width: 78rem; margin-inline: auto; padding: 0.6rem 0.9rem 0.6rem 1.4rem; border-radius: 99px; background: linear-gradient(180deg, rgb(255 255 255 / 0.62), rgb(250 246 255 / 0.4)); }
+  .landing-hero { display: grid; align-items: center; gap: 3rem; max-width: 78rem; min-height: min(48rem, calc(100dvh - 6rem)); margin-inline: auto; padding-block: 3rem; }
+  .landing-section { max-width: 78rem; margin-inline: auto; padding-block: clamp(3rem, 7vw, 5.5rem); scroll-margin-top: 4rem; }
+  .landing-title { margin-bottom: 2rem; font-size: clamp(1.9rem, 3.8vw, 2.9rem); line-height: 1.1; font-weight: 700; letter-spacing: -0.025em; text-wrap: balance; }
+  .landing-stage { position: relative; width: min(100%, 34rem); margin-inline: auto; padding: 2.6rem 1.4rem; }
+  .landing-loop { position: relative; display: grid; gap: 2.2rem; }
+  .landing-sdg { display: grid; gap: 2.2rem; padding: clamp(1.6rem, 4vw, 3.2rem); --tint: rgb(176 240 246 / 0.6); }
+  .landing-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem; max-width: 78rem; margin-inline: auto; padding-block: 2rem; border-top: 1px solid rgb(255 255 255 / 0.6); }
+  @media (width >= 46rem) {
+    .landing-loop { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.8rem; }
+    .landing-loop::before { content: ''; position: absolute; top: 2.45rem; inset-inline: 12.5%; height: 0.9rem; border-radius: 99px; background: linear-gradient(90deg, rgb(166 121 255 / 0.55), rgb(115 229 222 / 0.6), rgb(131 207 255 / 0.6), rgb(244 170 207 / 0.6)), rgb(255 255 255 / 0.5); box-shadow: inset 0 2px 3px rgb(255 255 255 / 0.9), inset 0 -2px 3px rgb(90 70 160 / 0.2), 0 0.6rem 1rem -0.5rem rgb(90 70 160 / 0.4); }
+    .landing-sdg { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; }
+  }
+  @media (width >= 64rem) { .landing-hero { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); } }
+
+  /* A thick disc of glass, after the bevelled samples in the material reference. */
+  .lg-lens {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background:
+      radial-gradient(60% 46% at 28% 16%, rgb(255 255 255 / 0.75), transparent 72%),
+      radial-gradient(60% 50% at 78% 88%, rgb(190 236 255 / 0.55), transparent 70%),
+      radial-gradient(closest-side, rgb(255 255 255 / 0.1) 60%, rgb(255 255 255 / 0.42));
+    backdrop-filter: blur(6px) saturate(1.5);
+    box-shadow:
+      inset 1.6rem 2.1rem 2.6rem rgb(255 255 255 / 0.5),
+      inset -1.5rem -2.1rem 3rem rgb(166 121 255 / 0.3),
+      0 0 0 1px rgb(150 130 210 / 0.14),
+      0 3.2rem 5rem -2rem rgb(70 50 150 / 0.55),
+      2rem 3rem 5rem -1rem rgb(120 220 255 / 0.4),
+      -1rem 2.4rem 4rem -1rem rgb(244 150 214 / 0.32);
+  }
+  /* The bevel: bright where it catches the lamp, clear where it turns edge-on, tinted where it bends colour. */
+  .lg-lens::before, .lg-lens::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .lg-lens::before {
+    padding: 1.25rem;
+    background: conic-gradient(
+      from 318deg,
+      rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.5) 7%, rgb(255 255 255 / 0.12) 18%, rgb(206 182 255 / 0.4) 28%, rgb(255 255 255 / 0.85) 36%,
+      rgb(150 232 246 / 0.6) 44%, rgb(255 255 255 / 0.95) 50%, rgb(255 255 255 / 0.18) 60%, rgb(255 196 228 / 0.55) 72%, rgb(255 255 255 / 0.16) 84%, rgb(255 255 255 / 0.95)
+    );
+    filter: blur(0.6px);
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.95);
+  }
+  .lg-lens::after { inset: 1.2rem; padding: 1.5px; background: conic-gradient(from 120deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.25) 30%, rgb(190 170 255 / 0.5) 50%, rgb(255 255 255 / 0.3) 72%, rgb(255 255 255 / 0.95)); }
+
+  .auth { display: flex; flex-direction: column; min-height: 100dvh; padding: 1.2rem clamp(1rem, 4vw, 3.5rem) 2rem; overflow-x: clip; }
+  .auth > header { position: relative; z-index: 30; }
+  .auth-main { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; place-items: center; padding-block: 2rem; }
+  .auth-card { width: min(100%, 29rem); padding: clamp(1.4rem, 4vw, 2.4rem); }
+  .auth-art { position: absolute; inset: 0; z-index: -1; max-width: 62rem; margin-inline: auto; opacity: 0.9; }
+  .auth-art > * { position: absolute; }
+  .auth-art > :nth-child(1) { inset-inline-start: 3%; top: 16%; }
+  .auth-art > :nth-child(2) { inset-inline-end: 8%; bottom: 14%; }
+  .auth-art > :nth-child(3) { inset-inline-end: 22%; top: 8%; }
+  @media (width < 46rem) { .auth-art { opacity: 0.45; } }
+
+  @media print {
+    body * { visibility: hidden; }
+    .print-me, .print-me * { visibility: visible; }
+    .print-me { position: fixed; inset: 0; box-shadow: none; }
+  }
+
+  /* ---------- conversation ---------- */
+  .lg-bubble { width: fit-content; max-width: min(88%, 40rem); padding: 0.75rem 1.1rem; border-radius: 1.4rem; font-size: 0.9875rem; line-height: 1.5; overflow-wrap: anywhere; }
+  .lg-bubble p + p, .lg-bubble .lg-code + p { margin-top: 0.6rem; }
+  .lg-bubble-ai { border-end-start-radius: 0.4rem; background: linear-gradient(170deg, rgb(255 255 255 / 0.85), rgb(255 255 255 / 0.5)); box-shadow: inset 0 1.5px 1px #fff, inset 0 0 0 1px rgb(255 255 255 / 0.6), 0 0.7rem 1.1rem -0.8rem rgb(80 66 150 / 0.6); }
+  .lg-bubble-me { margin-inline-start: auto; border-end-end-radius: 0.4rem; color: #fff; background: radial-gradient(70% 42% at 50% 112%, rgb(196 178 255 / 0.8), transparent 74%), linear-gradient(98deg, #7553f3, #6746ea 60%, #6a56ee); box-shadow: inset 0 1.5px 1px rgb(255 255 255 / 0.5), 0 0.8rem 1.3rem -0.8rem rgb(101 66 240 / 0.8); }
+  .lg-bubble-error { background: linear-gradient(170deg, rgb(255 240 244 / 0.95), rgb(255 222 232 / 0.75)); }
+  .lg-typing { display: flex; gap: 0.35rem; padding-block: 1rem; }
+  .lg-typing i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #8a6cf4; animation: bob 1s ease-in-out infinite; }
+  .lg-typing i:nth-child(2) { animation-delay: 0.14s; }
+  .lg-typing i:nth-child(3) { animation-delay: 0.28s; }
+  @keyframes bob { 0%, 70%, 100% { transform: none; opacity: 0.5; } 35% { transform: translateY(-5px); opacity: 1; } }
+  .lg-code { margin-block: 0.6rem; overflow: hidden; border-radius: 1.1rem; color: #f2efff; background: linear-gradient(160deg, #2c2850, #1f2042 60%, #23304f); box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.28), 0 0.9rem 1.4rem -0.9rem rgb(30 20 80 / 0.8); }
+  .lg-code pre { overflow-x: auto; padding: 0.4rem 1rem 1rem; font: 0.875rem/1.6 var(--font-mono); text-align: left; }
+}

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build & test outputs
+dist/
+build/
+coverage/
+
+# Environment files (never commit real credentials)
+.env
+.env.*
+!.env.example
+
+# Keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Vercel & local tooling
+.vercel/
+*.local
+
+# Logs
+*.log
+logs/
+
+# Local databases & backups
+*.sqlite
+*.db
+*.sqlite3
+*.bak
+*.backup

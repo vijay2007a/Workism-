@@ -1,5 +1,24 @@
 # WORKISM 3.0 — Backend Implementation Plan
 
+## Execution Status Ledger
+
+| Phase | Scope | Code & Automated Verification | Live External Verification |
+|---|---|---|---|
+| 0 | Repo audit & remote check | Complete (empty remote verified; local frontend preserved) | Remote inspected via `git ls-remote` |
+| 1 | Plan, `.gitignore`, `.env.example`, secret scanner, Git init | Complete & committed | N/A |
+| 2 | Supabase PostgreSQL schema, RLS, storage, seed migrations (`0001`–`0004`) | Complete & verified (`schema.test.ts`) | Pending live `supabase db push` (no `DATABASE_URL` in environment) |
+| 3–4 | Supabase Auth endpoints, JWT verify, RBAC, RLS, negative authz suite | Complete & verified (`auth-security.test.ts`) | Pending live Supabase project credentials & Google OAuth setup |
+| 5 | Skill Profiling & server-graded assessments (Liquid Skill Blob contract) | Complete & verified (`lifecycle.test.ts`) | Pending live Supabase DB |
+| 6–7 | Adaptive AI roadmaps, multilingual Gemini tutor (18 langs incl. `pt` & RTL `ar`) | Complete & verified (`ai-execution-certs.test.ts`, `lifecycle.test.ts`) | Pending live `GEMINI_API_KEY` |
+| 8 | Programming language capabilities & external isolated sandbox boundary | Complete & verified (`unavailable` state never simulated) | Optional `CODE_EXECUTION_URL` |
+| 9 | Project assessment engine, rubrics, secure Storage uploads | Complete & verified (`auth-security.test.ts`, `lifecycle.test.ts`) | Pending live Supabase Storage bucket |
+| 10–12 | HMAC-SHA256 signed certificates, PDF 1.4, public `/verify`, portfolios, Instructor & Admin APIs | Complete & verified (`lifecycle.test.ts`, `ai-execution-certs.test.ts`) | Pending live `CERTIFICATE_SIGNING_SECRET` |
+| 13 | Frontend integration (`AuthProvider`, `services/index.ts`, pages, staff dashboards, `pt` locale) | Complete & verified (`npm run build`, 47 frontend tests) | Pending live env vars |
+| 14–19 | Secret scanner, `dist/` bundle check, `vercel.json`, CSP/security headers, `npm audit` (0 vulns) | Complete & verified (`deployment.test.ts`) | Pending live Vercel deployment |
+| 20–22 | Security audit, Ponytail refactor, full documentation suite | Complete (`SECURITY_AUDIT_REPORT.md` + 4 guides) | See `DEPLOYMENT_GUIDE.md` |
+
+---
+
 ## Phase 0 — Repository Discovery & Audit Summary
 
 | Area | Verified Finding |

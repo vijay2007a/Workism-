@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, connected, getAccessToken, setAccessToken, type UserRole } from '../services';
+import { api, connected, getAccessToken, setAccessToken } from '../services';
 import { supabase } from './supabase';
 
 export interface SessionState {
@@ -7,7 +7,6 @@ export interface SessionState {
   authenticated: boolean;
   userId: string | null;
   email: string;
-  role: UserRole;
   signOut: () => Promise<void>;
   syncToken: (token: string | null) => void;
 }
@@ -17,7 +16,6 @@ const Ctx = createContext<SessionState>({
   authenticated: false,
   userId: null,
   email: '',
-  role: 'student',
   signOut: async () => {},
   syncToken: () => {},
 });
@@ -28,7 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(!supabase);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('student');
   const [token, setToken] = useState<string | null>(getAccessToken());
 
   const syncToken = useCallback((next: string | null) => {
@@ -64,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncToken(null);
     setUserId(null);
     setEmail('');
-    setRole('student');
   }, [syncToken]);
 
   const value = useMemo<SessionState>(
@@ -73,11 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authenticated: Boolean(connected && token),
       userId,
       email,
-      role,
       signOut,
       syncToken,
     }),
-    [ready, token, userId, email, role, signOut, syncToken],
+    [ready, token, userId, email, signOut, syncToken],
   );
 
   return <Ctx value={value}>{children}</Ctx>;

@@ -183,3 +183,26 @@ test('file upload security rejects path traversal, executable files, forged magi
   zip.set(nameBytes, 30);
   assert.throws(() => validateUploadBytes(zip, 'application/zip'), /path traversal/);
 });
+
+test('server rejects expired assessment attempts and path-traversal storage paths', async () => {
+  const mem = createMemoryRuntime();
+  const student = mem.seedUser({ email: 'exp@example.com', password: 'Password1', displayName: 'Exp', role: 'student' });
+  const app = createApp(mem.runtime, TEST_ENV);
+
+  // Create an already-expired attempt directly via runtime
+  const expired = await mem.runtime.db.createAssessmentAttempt(student.id, 'assess-js', 'js', -60, 'en');
+  const submitExpired = await call(app, 'POST', `/api/assessments/attempts/${expired.id}/submit`, {
+    token: student.token,
+    body: { answers: [1, 1, 1, 1, 1] },
+  });
+  assert.equal(submitExpired.status, 410);
+  assert.equal(submitExpired.json.error.code, 'attempt_expired');
+
+  // Path traversal in storagePath is rejected even under the user's own prefix
+  const badPath = await call(app, 'POST', '/api/projects/accessible-portfolio/submissions', {
+    token: student.token,
+    body: { storagePath: `${student.id}/../other-user/secret.pdf`, note: 'Attempt traversal' },
+  });
+  assert.equal(badPath.status, 403);
+  assert.equal(badPath.json.error.code, 'forbidden_storage_path');
+});

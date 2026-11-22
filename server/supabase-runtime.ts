@@ -294,6 +294,13 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
         if (error || !data) throw new ApiError(500, 'storage_error', 'Could not prepare file upload URL.');
         return { signedUrl: data.signedUrl, path: data.path, expiresInSeconds: 120 };
       },
+      async uploadBytes(objectPath, bytes, contentType) {
+        const { data, error } = await admin().storage
+          .from('project-submissions')
+          .upload(objectPath, bytes, { contentType, upsert: false });
+        if (error || !data) throw new ApiError(500, 'storage_error', 'Could not store uploaded file.');
+        return { path: data.path };
+      },
       async createSignedDownloadUrl(objectPath) {
         const { data, error } = await admin().storage
           .from('project-submissions')
@@ -549,9 +556,11 @@ export function createSupabaseRuntime(env: ServerEnv): BackendRuntime {
           })
           .eq('id', input.attemptId)
           .eq('user_id', input.userId)
+          .eq('status', 'in_progress')
           .select('*')
-          .single();
-        if (error || !data) throw new ApiError(500, 'attempt_submit_failed', 'Could not finalize attempt.');
+          .maybeSingle();
+        if (error) throw new ApiError(500, 'attempt_submit_failed', 'Could not finalize attempt.');
+        if (!data) throw new ApiError(409, 'already_submitted', 'This attempt has already been submitted.');
 
         const { data: skillRow } = await admin().from('skills').select('default_target').eq('id', input.skillId).maybeSingle();
         await admin().from('user_skill_scores').upsert({

@@ -168,6 +168,10 @@ export const skillsLearningRoutes: RouteDef[] = [
       if (!attempt) throw new ApiError(404, 'attempt_not_found', 'Assessment attempt not found.');
       if (attempt.userId !== user.id) throw new ApiError(403, 'forbidden', 'Cannot submit another user attempt.');
       if (attempt.status !== 'in_progress') throw new ApiError(409, 'already_submitted', 'This attempt has already been submitted.');
+      // Enforce server-side assessment time limit (+15s network grace).
+      if (Date.now() > new Date(attempt.expiresAt).getTime() + 15_000) {
+        throw new ApiError(410, 'attempt_expired', 'Assessment time limit has expired. Start a new attempt.');
+      }
 
       const assessment = await ctx.runtime.db.getAssessmentBySkill(attempt.skillId);
       if (!assessment) throw new ApiError(404, 'assessment_not_found', 'Assessment definition missing.');

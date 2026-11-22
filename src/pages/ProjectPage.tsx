@@ -38,14 +38,17 @@ export default function ProjectPage() {
 
   const onFilePick = async (file: File | undefined) => {
     if (!file) return setUploadFile(null);
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File size must be under 10 MB.');
+    // shortcut: inline base64 upload caps at 3 MB for Vercel 4.5 MB body limit; switch to direct signed-URL PUT via /upload-url for 3-10 MB files
+    if (file.size > 3 * 1024 * 1024) {
+      setError('Inline uploads are capped at 3 MB (use a GitHub link for larger archives).');
       return;
     }
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
     setUploadFile({ name: file.name, mime: file.type || 'application/octet-stream', base64: btoa(binary) });
     setError('');
   };

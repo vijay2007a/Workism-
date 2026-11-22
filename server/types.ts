@@ -266,6 +266,7 @@ export interface BackendRuntime {
   };
   storage: {
     createSignedUploadUrl(userId: string, objectPath: string, contentType: string): Promise<{ signedUrl: string; path: string; expiresInSeconds: number }>;
+    uploadBytes(objectPath: string, bytes: Uint8Array, contentType: string): Promise<{ path: string }>;
     createSignedDownloadUrl(objectPath: string): Promise<{ signedUrl: string; expiresInSeconds: number }>;
   };
   db: {

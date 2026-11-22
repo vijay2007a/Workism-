@@ -305,6 +305,9 @@ export function createMemoryRuntime(opts: MemoryRuntimeOptions = {}) {
       async createSignedUploadUrl(_userId, objectPath) {
         return { signedUrl: `https://storage.test/upload/${encodeURIComponent(objectPath)}`, path: objectPath, expiresInSeconds: 120 };
       },
+      async uploadBytes(objectPath) {
+        return { path: objectPath };
+      },
       async createSignedDownloadUrl(objectPath) {
         return { signedUrl: `https://storage.test/download/${encodeURIComponent(objectPath)}`, expiresInSeconds: 300 };
       },

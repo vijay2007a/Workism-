@@ -142,7 +142,7 @@ export const projectsCertsRoutes: RouteDef[] = [
       let fileSizeBytes: number | null = body.fileSizeBytes ?? null;
       let fileMime: string | null = body.fileMime ?? null;
 
-      if (storagePath && !storagePath.startsWith(`${user.id}/`)) {
+      if (storagePath && (!storagePath.startsWith(`${user.id}/`) || storagePath.includes('..') || storagePath.includes('\\'))) {
         throw new ApiError(403, 'forbidden_storage_path', 'Storage path must belong to your own account.');
       }
       if (body.fileBase64) {
@@ -155,7 +155,9 @@ export const projectsCertsRoutes: RouteDef[] = [
         fileName = meta.safeName;
         fileSizeBytes = bytes.byteLength;
         fileMime = meta.mime;
-        storagePath = buildSubmissionStoragePath(user.id, project.id, meta.safeName);
+        const targetPath = buildSubmissionStoragePath(user.id, project.id, meta.safeName);
+        const stored = await ctx.runtime.storage.uploadBytes(targetPath, new Uint8Array(bytes), meta.mime);
+        storagePath = stored.path;
       } else if (storagePath && fileName && fileMime && fileSizeBytes) {
         const meta = validateUploadMetadata(fileName, fileMime, fileSizeBytes);
         fileName = meta.safeName;
@@ -331,6 +333,7 @@ export const projectsCertsRoutes: RouteDef[] = [
     method: 'GET',
     pattern: '/api/certificates/:code/pdf',
     async handler(ctx) {
+      await enforceRateLimit(ctx, 'cert:pdf', ctx.ipHash, 30, 600);
       const code = decodeURIComponent(ctx.params.code).trim();
       const cert = await ctx.runtime.db.getIssuedCertificateByCode(code);
       if (!cert) throw new ApiError(404, 'certificate_not_found', 'Certificate not found.');
